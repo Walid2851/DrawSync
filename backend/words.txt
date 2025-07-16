@@ -1,0 +1,90 @@
+cat
+dog
+house
+tree
+sun
+moon
+star
+flower
+bird
+fish
+car
+boat
+plane
+train
+bike
+chair
+table
+book
+phone
+computer
+apple
+banana
+orange
+pizza
+hamburger
+ice cream
+cake
+bread
+milk
+water
+elephant
+giraffe
+penguin
+dolphin
+butterfly
+dragon
+castle
+bridge
+mountain
+ocean
+forest
+desert
+volcano
+waterfall
+rainbow
+thunder
+lightning
+snow
+rain
+wind
+robot
+spaceship
+rocket
+submarine
+helicopter
+skyscraper
+lighthouse
+windmill
+telescope
+microscope
+phoenix
+unicorn
+centaur
+mermaid
+vampire
+werewolf
+ghost
+zombie
+alien
+cyborg
+time machine
+teleporter
+hologram
+laser
+quantum
+black hole
+galaxy
+nebula
+asteroid
+meteor
+pyramid
+colosseum
+parthenon
+taj mahal
+great wall
+eiffel tower
+statue of liberty
+big ben
+sydney opera house
+petronas towers 
