@@ -56,6 +56,8 @@ const GameRoom = () => {
     handleCanvasCleared,
     handleRoomDeleted,
     handlePlayersUpdate,
+    handleDrawData,
+    handleGameState,
   } = useGameStore();
 
   const [isReady, setIsReady] = useState(false);
@@ -152,14 +154,16 @@ const GameRoom = () => {
   }, [addChatMessageFromSocket]);
 
   const handleDrawDataEvent = useCallback((data) => {
-    // Drawing data is handled by the DrawingCanvas component
+    // Add incoming drawing data to the store
+    handleDrawData(data);
     console.log('Draw data received:', data);
-  }, []);
+  }, [handleDrawData]);
 
   const handleGameStateEvent = useCallback((data) => {
-    // Game state updates are handled by the store
+    // Handle game state updates
+    handleGameState(data);
     console.log('Game state update:', data);
-  }, []);
+  }, [handleGameState]);
 
   // Game controls
   const handleStartGame = () => {
@@ -385,13 +389,9 @@ const GameRoom = () => {
             <div className="bg-white rounded-lg shadow-md p-4">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold mb-2">Drawing Canvas</h2>
-                {isGameActive && (
+                {isGameActive && isCurrentDrawer && (
                   <div className="text-sm text-gray-600 mb-2">
-                    {isCurrentDrawer ? (
-                      <span>Your turn to draw! Word: {currentWord}</span>
-                    ) : (
-                      <span>Waiting for drawing... Word: {currentWord}</span>
-                    )}
+                    <span>Your turn to draw! Word: {currentWord}</span>
                   </div>
                 )}
               </div>

@@ -178,7 +178,7 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
   }, [isGameActive, isCurrentDrawer, brushColor, brushSize, sendDrawData, addDrawingData, user]);
 
   const draw = useCallback((x, y) => {
-    if (!isDrawing || !isGameActive || !isCurrentDrawer) return;
+    if (!isGameActive || !isCurrentDrawer) return;
 
     // Add to current stroke
     setCurrentStroke(prev => [...prev, { x, y, is_drawing: true }]);
@@ -206,7 +206,7 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
 
     setLastX(x);
     setLastY(y);
-  }, [isDrawing, isGameActive, isCurrentDrawer, brushColor, brushSize, sendDrawData, addDrawingData, user]);
+  }, [isGameActive, isCurrentDrawer, brushColor, brushSize, sendDrawData, addDrawingData, user]);
 
   const stopDrawing = useCallback(() => {
     if (!isGameActive || !isCurrentDrawer) return;
@@ -320,16 +320,7 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
         </div>
       )}
       
-      {isGameActive && !isCurrentDrawer && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded-lg">
-          <p className="text-white text-lg font-medium">
-            {gameState?.current_drawer_id ? 
-              `Waiting for ${gameState.current_drawer_id === user?.id ? 'you' : 'someone'} to draw...` : 
-              'Waiting for drawer...'
-            }
-          </p>
-        </div>
-      )}
+
 
       {/* Drawing controls for current drawer */}
       {isCurrentDrawer && isGameActive && (

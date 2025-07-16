@@ -387,6 +387,30 @@ const useGameStore = create((set, get) => ({
   handlePlayersUpdate: (data) => {
     set({ players: data.players || [] });
   },
+
+  // Handle incoming drawing data from other players
+  handleDrawData: (data) => {
+    if (data && data.data) {
+      // Add the received drawing data to the store
+      set((state) => ({
+        drawingData: [...state.drawingData, data.data],
+      }));
+    }
+  },
+
+  // Handle incoming game state updates
+  handleGameState: (data) => {
+    set((state) => ({
+      gameState: { ...state.gameState, ...data },
+      isGameActive: data.game_started !== undefined ? data.game_started : state.isGameActive,
+      currentRound: data.current_round || state.currentRound,
+      totalRounds: data.max_rounds || state.totalRounds,
+      currentWord: data.word || state.currentWord,
+      timeRemaining: data.time_remaining || state.timeRemaining,
+      currentDrawer: data.current_drawer_id || state.currentDrawer,
+      isDrawing: data.is_drawer || false,
+    }));
+  },
 }));
 
 export default useGameStore; 

@@ -607,6 +607,10 @@ class DrawSyncSocketServer:
             'room_id': room_id
         })
         
+        # Send game state update to all clients
+        for client_id in room_info['clients']:
+            self._send_game_state_to_client(client_id, room_id)
+        
         # Start first round
         self._start_round(room_id)
     
@@ -657,6 +661,10 @@ class DrawSyncSocketServer:
                     'word': '_' * len(word),
                     'message': f'{current_drawer["username"]} is drawing!'
                 })
+        
+        # Send game state update to all clients
+        for client_id in room_info['clients']:
+            self._send_game_state_to_client(client_id, room_id)
         
         # Start timer
         self._start_round_timer(room_id)
@@ -726,6 +734,10 @@ class DrawSyncSocketServer:
         room_info['current_round'] += 1
         room_info['current_drawer_index'] += 1
         
+        # Send game state update to all clients
+        for client_id in room_info['clients']:
+            self._send_game_state_to_client(client_id, room_id)
+        
         # Check if game should end
         if room_info['current_round'] > room_info['max_rounds']:
             self._end_game(room_id)
@@ -768,6 +780,10 @@ class DrawSyncSocketServer:
         room_info['current_word'] = ''
         room_info['drawing_data'] = []
         room_info['guessed_players'] = set()
+        
+        # Send final game state update to all clients
+        for client_id in room_info['clients']:
+            self._send_game_state_to_client(client_id, room_id)
     
     def _handle_guess_word(self, client_id: str, message: dict):
         """Handle word guess (legacy support)"""
@@ -887,6 +903,11 @@ class DrawSyncSocketServer:
             is_drawer = current_drawer['id'] == client_info['user_id']
         
         # Send appropriate game state
+        current_drawer_id = None
+        if room_info['current_drawer_index'] < len(players_list):
+            current_drawer = players_list[room_info['current_drawer_index']]
+            current_drawer_id = current_drawer['id']
+        
         game_state = {
             'type': 'game_state',
             'current_round': room_info['current_round'],
@@ -894,6 +915,7 @@ class DrawSyncSocketServer:
             'time_remaining': room_info['time_remaining'],
             'game_started': room_info['game_started'],
             'players': list(room_info['players'].values()),
+            'current_drawer_id': current_drawer_id,
             'word': room_info['current_word'] if is_drawer else '_' * len(room_info['current_word']) if room_info['current_word'] else '',
             'is_drawer': is_drawer
         }
