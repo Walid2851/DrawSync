@@ -178,7 +178,7 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
   }, [isGameActive, isCurrentDrawer, brushColor, brushSize, sendDrawData, addDrawingData, user]);
 
   const draw = useCallback((x, y) => {
-    if (!isGameActive || !isCurrentDrawer) return;
+    if (!isGameActive || !isCurrentDrawer || !isDrawing) return;
 
     // Add to current stroke
     setCurrentStroke(prev => [...prev, { x, y, is_drawing: true }]);
@@ -206,7 +206,7 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
 
     setLastX(x);
     setLastY(y);
-  }, [isGameActive, isCurrentDrawer, brushColor, brushSize, sendDrawData, addDrawingData, user]);
+  }, [isGameActive, isCurrentDrawer, isDrawing, brushColor, brushSize, sendDrawData, addDrawingData, user]);
 
   const stopDrawing = useCallback(() => {
     if (!isGameActive || !isCurrentDrawer) return;
@@ -258,9 +258,10 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
 
   const handleMouseMove = useCallback((e) => {
     e.preventDefault();
+    if (!isDrawing) return; // Only draw if mouse button is pressed
     const pos = getMousePos(e);
     draw(pos.x, pos.y);
-  }, [getMousePos, draw]);
+  }, [getMousePos, draw, isDrawing]);
 
   const handleMouseUp = useCallback((e) => {
     e.preventDefault();
@@ -281,14 +282,29 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
 
   const handleTouchMove = useCallback((e) => {
     e.preventDefault();
+    if (!isDrawing) return; // Only draw if touch is active
     const pos = getTouchPos(e);
     draw(pos.x, pos.y);
-  }, [getTouchPos, draw]);
+  }, [getTouchPos, draw, isDrawing]);
 
   const handleTouchEnd = useCallback((e) => {
     e.preventDefault();
     stopDrawing();
   }, [stopDrawing]);
+
+  // Add document-level mouse up handler to stop drawing when mouse is released outside canvas
+  useEffect(() => {
+    const handleDocumentMouseUp = () => {
+      if (isDrawing) {
+        stopDrawing();
+      }
+    };
+
+    document.addEventListener('mouseup', handleDocumentMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', handleDocumentMouseUp);
+    };
+  }, [isDrawing, stopDrawing]);
 
   return (
     <div className="relative">
