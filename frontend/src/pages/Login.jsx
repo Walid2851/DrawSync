@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn, Sparkles, Palette, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import useAuthStore from '../store/authStore';
@@ -73,90 +73,208 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      {/* Background Elements */}
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50" />
+      
+      {/* Floating Elements */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="max-w-md w-full space-y-8"
-      >
-        <div className="text-center">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="mx-auto h-12 w-12 bg-primary-600 rounded-full flex items-center justify-center"
-          >
-            <LogIn className="h-6 w-6 text-white" />
-          </motion.div>
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            Welcome back
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Sign in to your DrawSync account
-          </p>
-        </div>
+        className="absolute top-20 left-20 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-indigo-400/20 rounded-full blur-3xl"
+        animate={{ 
+          x: [0, 30, 0],
+          y: [0, -30, 0],
+        }}
+        transition={{ 
+          duration: 20,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
+      <motion.div
+        className="absolute bottom-20 right-20 w-40 h-40 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-3xl"
+        animate={{ 
+          x: [0, -40, 0],
+          y: [0, 40, 0],
+        }}
+        transition={{ 
+          duration: 25,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
 
-        <motion.form
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="card p-8 space-y-6"
-          onSubmit={handleSubmit}
+      <div className="relative z-10 w-full max-w-md px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-8"
         >
-          <Input
-            label="Username"
-            type="text"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            error={errors.username}
-            placeholder="Enter your username"
-            required
-          />
-
-          <div className="relative">
-            <Input
-              label="Password"
-              type={showPassword ? 'text' : 'password'}
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              error={errors.password}
-              placeholder="Enter your password"
-              required
-            />
-            <button
-              type="button"
-              className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            </button>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            loading={isLoading}
-            disabled={isLoading}
+          {/* Logo and Brand */}
+          <motion.div
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl flex items-center justify-center shadow-2xl mb-6"
           >
-            Sign In
-          </Button>
+            <div className="relative">
+              <Palette className="h-10 w-10 text-white" />
+              <motion.div
+                className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full"
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+            </div>
+          </motion.div>
 
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="text-4xl font-bold gradient-text mb-2"
+          >
+            DrawSync
+          </motion.h1>
+          
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="text-slate-600 text-lg font-medium"
+          >
+            Welcome back to your creative space
+          </motion.p>
+          
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="flex items-center justify-center space-x-4 mt-4 text-sm text-slate-500"
+          >
+            <div className="flex items-center space-x-1">
+              <Users className="w-4 h-4" />
+              <span>Multiplayer</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Sparkles className="w-4 h-4" />
+              <span>Real-time</span>
+            </div>
+          </motion.div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="card p-8 space-y-6"
+        >
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.7 }}
+            >
+              <Input
+                label="Username"
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                error={errors.username}
+                placeholder="Enter your username"
+                required
+                className={errors.username ? 'input-error' : ''}
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.8 }}
+              className="relative"
+            >
+              <Input
+                label="Password"
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                error={errors.password}
+                placeholder="Enter your password"
+                required
+                className={errors.password ? 'input-error' : ''}
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-8 text-slate-400 hover:text-slate-600 transition-colors duration-200"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.9 }}
+            >
+              <Button
+                type="submit"
+                className="w-full btn-lg"
+                loading={isLoading}
+                disabled={isLoading}
+              >
+                <LogIn className="w-5 h-5 mr-2" />
+                Sign In
+              </Button>
+            </motion.div>
+          </form>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.0 }}
+            className="text-center pt-4 border-t border-slate-200"
+          >
+            <p className="text-slate-600">
               Don't have an account?{' '}
               <Link
                 to="/register"
-                className="font-medium text-primary-600 hover:text-primary-500"
+                className="font-semibold gradient-text hover:underline transition-all duration-200"
               >
-                Sign up here
+                Create one here
               </Link>
             </p>
+          </motion.div>
+        </motion.div>
+
+        {/* Feature Highlights */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.1 }}
+          className="mt-8 grid grid-cols-3 gap-4 text-center"
+        >
+          <div className="glass-card p-4">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <Users className="w-4 h-4 text-white" />
+            </div>
+            <p className="text-xs font-medium text-slate-700">Multiplayer</p>
           </div>
-        </motion.form>
-      </motion.div>
+          <div className="glass-card p-4">
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <Palette className="w-4 h-4 text-white" />
+            </div>
+            <p className="text-xs font-medium text-slate-700">Drawing</p>
+          </div>
+          <div className="glass-card p-4">
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <p className="text-xs font-medium text-slate-700">Real-time</p>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 };

@@ -1,9 +1,27 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Play, 
+  SkipForward, 
+  Trash2, 
+  Users, 
+  Clock, 
+  Crown,
+  Palette,
+  MessageSquare,
+  Wifi,
+  WifiOff,
+  CheckCircle,
+  Circle
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import DrawingCanvas from '../components/DrawingCanvas';
 import ChatBox from '../components/ChatBox';
 import Button from '../components/Button';
+import RoundEndPopup from '../components/RoundEndPopup';
+import GameEndPopup from '../components/GameEndPopup';
 import useGameStore from '../store/gameStore';
 import useAuthStore from '../store/authStore';
 import socketManager from '../utils/socket';
@@ -28,6 +46,10 @@ const GameRoom = () => {
     isSocketConnected,
     isLoading,
     error,
+    showRoundEndPopup,
+    roundEndData,
+    showGameEndPopup,
+    gameEndData,
     joinRoom,
     leaveRoom,
     deleteRoom,
@@ -41,6 +63,8 @@ const GameRoom = () => {
     setReady,
     skipTurn,
     resetGameState,
+    hideRoundEndPopup,
+    hideGameEndPopup,
     handleSocketConnected,
     handleAuthenticated,
     handleRoomJoined,
@@ -205,6 +229,16 @@ const GameRoom = () => {
     sendGuess();
   };
 
+  const handleGoToDashboard = () => {
+    hideRoundEndPopup();
+    navigate('/dashboard');
+  };
+
+  const handleGoToDashboardFromGameEnd = () => {
+    hideGameEndPopup();
+    navigate('/dashboard');
+  };
+
   // Check if current user is the drawer
   const isCurrentDrawer = isDrawing;
 
@@ -304,122 +338,261 @@ const GameRoom = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-xl">Loading room...</div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className="loading-spinner w-8 h-8"></div>
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900">Loading room...</h2>
+          <p className="text-slate-600 mt-2">Connecting to your drawing space</p>
+        </motion.div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500 text-xl">Error: {error}</div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span className="text-white text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900">Connection Error</h2>
+          <p className="text-slate-600 mt-2">{error}</p>
+          <Button onClick={() => navigate('/dashboard')} className="mt-4">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Dashboard
+          </Button>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="game-layout">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="lg:col-span-4 card p-6 mb-6"
+        >
           <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">Room {roomId}</h1>
-              <div className="flex items-center space-x-4 text-sm text-gray-600">
-                <span>Players: {players.length}</span>
-                <span>Round: {currentRound}/{totalRounds}</span>
-                {isGameActive && <span>Time: {timeRemaining}s</span>}
-                {isSocketConnected ? (
-                  <span className="text-green-500">● Connected</span>
-                ) : (
-                  <span className="text-red-500">● Disconnected</span>
-                )}
+            <div className="flex items-center space-x-6">
+              <Button
+                variant="ghost"
+                onClick={() => navigate('/dashboard')}
+                className="flex items-center space-x-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </Button>
+              
+              <div>
+                <h1 className="text-2xl font-bold gradient-text">Room #{roomId}</h1>
+                <div className="flex items-center space-x-6 text-sm text-slate-600 mt-1">
+                  <div className="flex items-center space-x-2">
+                    <Users className="w-4 h-4" />
+                    <span>{players.length} players</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Palette className="w-4 h-4" />
+                    <span>Round {currentRound}/{totalRounds}</span>
+                  </div>
+                  {isGameActive && (
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4" />
+                      <span className="font-semibold text-slate-800">{timeRemaining}s</span>
+                    </div>
+                  )}
+                  <div className="flex items-center space-x-2">
+                    {isSocketConnected ? (
+                      <>
+                        <Wifi className="w-4 h-4 text-emerald-500" />
+                        <span className="text-emerald-600 font-medium">Connected</span>
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff className="w-4 h-4 text-red-500" />
+                        <span className="text-red-600 font-medium">Disconnected</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="flex space-x-2">
+            
+            <div className="flex space-x-3">
               {!isGameActive && (
                 <>
                   <Button
                     onClick={handleReadyToggle}
                     variant={isReady ? 'success' : 'secondary'}
+                    className="flex items-center space-x-2"
                   >
-                    {isReady ? 'Ready' : 'Not Ready'}
+                    {isReady ? <CheckCircle className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                    <span>{isReady ? 'Ready' : 'Not Ready'}</span>
                   </Button>
-                  <Button onClick={handleStartGame} variant="primary">
-                    Start Game
+                  <Button 
+                    onClick={handleStartGame} 
+                    className="flex items-center space-x-2"
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>Start Game</span>
                   </Button>
                 </>
               )}
               {isGameActive && isCurrentDrawer && (
-                <Button onClick={handleSkipTurn} variant="warning">
-                  Skip Turn
+                <Button 
+                  onClick={handleSkipTurn} 
+                  variant="warning"
+                  className="flex items-center space-x-2"
+                >
+                  <SkipForward className="w-4 h-4" />
+                  <span>Skip Turn</span>
                 </Button>
               )}
-              <Button onClick={handleLeaveRoom} variant="secondary">
-                Leave Room
+              <Button 
+                onClick={handleLeaveRoom} 
+                variant="secondary"
+                className="flex items-center space-x-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Leave</span>
               </Button>
-              <Button onClick={handleDeleteRoom} variant="danger">
-                Delete Room
+              <Button 
+                onClick={handleDeleteRoom} 
+                variant="danger"
+                className="flex items-center space-x-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
               </Button>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          {/* Players Panel */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-4">
-              <h2 className="text-lg font-semibold mb-4">Players</h2>
-              <div className="space-y-2">
-                {players.map((player, index) => (
-                  <div
-                    key={`${player.id}-${index}`}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded"
-                  >
+        {/* Players Panel */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+          className="game-sidebar"
+        >
+          <div className="card p-6">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center space-x-2">
+              <Users className="w-5 h-5" />
+              <span>Players</span>
+            </h2>
+            <div className="space-y-3">
+              {players.map((player, index) => (
+                <motion.div
+                  key={`${player.id}-${index}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="player-item"
+                >
+                  <div className="player-avatar">
+                    {player.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-2">
-                      <span className="font-medium">{player.username}</span>
+                      <span className="font-semibold text-slate-900 truncate">
+                        {player.username}
+                      </span>
                       {player.ready && (
-                        <span className="text-green-500 text-sm">✓</span>
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                      )}
+                      {isGameActive && isCurrentDrawer && player.id === user?.id && (
+                        <Palette className="w-4 h-4 text-blue-500 animate-pulse" />
                       )}
                     </div>
-                    <span className="text-sm text-gray-600">
-                      {player.score || 0} pts
-                    </span>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <Crown className="w-3 h-3 text-amber-500" />
+                      <span className="text-sm font-semibold text-slate-700">
+                        {player.score || 0} pts
+                      </span>
+                    </div>
                   </div>
-                ))}
-              </div>
+                </motion.div>
+              ))}
             </div>
           </div>
+        </motion.div>
 
-          {/* Game Area */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-md p-4">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold mb-2">Drawing Canvas</h2>
-                {isGameActive && isCurrentDrawer && (
-                  <div className="text-sm text-gray-600 mb-2">
-                    <span>Your turn to draw! Word: {currentWord}</span>
+        {/* Game Area */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="game-main"
+        >
+          <div className="card p-6 h-full">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-slate-900 mb-2 flex items-center space-x-2">
+                <Palette className="w-5 h-5" />
+                <span>Drawing Canvas</span>
+              </h2>
+              {isGameActive && isCurrentDrawer && (
+                <div className="glass-card p-4 mb-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-semibold text-slate-700">Your word to draw:</span>
+                    <span className="text-lg font-bold gradient-text">{currentWord}</span>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
+            <div className="canvas-container">
               <DrawingCanvas width={800} height={600} />
             </div>
           </div>
+        </motion.div>
 
-          {/* Chat Panel */}
-          <div className="lg:col-span-1">
-            <ChatBox
-              messages={chatMessages}
-              onSendMessage={handleSendMessage}
-              guessInput={guessInput}
-              onGuessInputChange={setGuessInput}
-              onSendGuess={handleSendGuess}
-              isGameActive={isGameActive}
-            />
-          </div>
-        </div>
+        {/* Chat Panel */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          className="game-sidebar"
+        >
+          <ChatBox
+            messages={chatMessages}
+            onSendMessage={handleSendMessage}
+            guessInput={guessInput}
+            onGuessInputChange={setGuessInput}
+            onSendGuess={handleSendGuess}
+            isGameActive={isGameActive}
+          />
+        </motion.div>
       </div>
+
+      {/* Round End Popup */}
+      <RoundEndPopup
+        isOpen={showRoundEndPopup}
+        onClose={hideRoundEndPopup}
+        roundNumber={roundEndData?.roundNumber || 0}
+        word={roundEndData?.word || ''}
+        players={roundEndData?.players || []}
+        onGoToDashboard={handleGoToDashboard}
+      />
+
+      {/* Game End Popup */}
+      <GameEndPopup
+        isOpen={showGameEndPopup}
+        onClose={hideGameEndPopup}
+        finalScores={gameEndData?.finalScores || {}}
+        players={gameEndData?.players || []}
+        onGoToDashboard={handleGoToDashboardFromGameEnd}
+      />
     </div>
   );
 };

@@ -9,14 +9,14 @@ const Input = ({
 }) => {
   const inputClasses = clsx(
     'input',
-    error && 'border-red-500 focus:ring-red-500',
+    error && 'input-error',
     className
   );
 
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-semibold text-slate-700 mb-2">
           {label}
         </label>
       )}
@@ -25,7 +25,10 @@ const Input = ({
         {...props}
       />
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <p className="mt-2 text-sm font-medium text-red-600 flex items-center space-x-1">
+          <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+          <span>{error}</span>
+        </p>
       )}
     </div>
   );

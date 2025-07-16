@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { Palette, Eraser, RotateCcw, Settings } from 'lucide-react';
 import useGameStore from '../store/gameStore';
 import useAuthStore from '../store/authStore';
 
@@ -307,11 +308,13 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
   }, [isDrawing, stopDrawing]);
 
   return (
-    <div className="relative">
+    <div className="relative w-full h-full">
       <canvas
         ref={canvasRef}
-        className={`border-2 border-gray-300 rounded-lg bg-white ${
-          isCurrentDrawer && isGameActive ? 'cursor-crosshair' : 'cursor-not-allowed'
+        className={`w-full h-full rounded-2xl shadow-2xl border-2 border-slate-200 bg-white transition-all duration-200 ${
+          isCurrentDrawer && isGameActive 
+            ? 'cursor-crosshair hover:border-blue-300' 
+            : 'cursor-not-allowed opacity-90'
         }`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -329,47 +332,83 @@ const DrawingCanvas = ({ width = 800, height = 600 }) => {
       />
       
       {!isGameActive && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
-          <p className="text-white text-lg font-medium">
-            Game not started yet
-          </p>
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-2xl">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-slate-400 to-slate-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Palette className="w-8 h-8 text-white" />
+            </div>
+            <p className="text-white text-lg font-semibold">
+              Game not started yet
+            </p>
+            <p className="text-slate-300 text-sm mt-1">
+              Wait for the game to begin to start drawing
+            </p>
+          </div>
         </div>
       )}
-      
-
 
       {/* Drawing controls for current drawer */}
       {isCurrentDrawer && isGameActive && (
-        <div className="absolute top-4 left-4 bg-white bg-opacity-90 p-3 rounded-lg shadow-lg">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Color:</label>
+        <div className="absolute top-4 left-4 glass-card p-4 rounded-2xl shadow-xl">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <Palette className="w-4 h-4 text-slate-600" />
+              <label className="text-sm font-semibold text-slate-700">Color:</label>
               <input
                 type="color"
                 value={brushColor}
                 onChange={(e) => useGameStore.getState().setBrushColor(e.target.value)}
-                className="w-8 h-8 border rounded cursor-pointer"
+                className="w-8 h-8 border-2 border-slate-200 rounded-lg cursor-pointer hover:scale-110 transition-transform duration-200"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Size:</label>
+            
+            <div className="flex items-center gap-3">
+              <Settings className="w-4 h-4 text-slate-600" />
+              <label className="text-sm font-semibold text-slate-700">Size:</label>
               <input
                 type="range"
                 min="1"
                 max="20"
                 value={brushSize}
                 onChange={(e) => useGameStore.getState().setBrushSize(parseInt(e.target.value))}
-                className="w-20"
+                className="w-20 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer slider"
               />
-              <span className="text-xs">{brushSize}</span>
+              <span className="text-xs font-semibold text-slate-700 min-w-[20px]">{brushSize}</span>
             </div>
+            
             <button
               onClick={clearCanvas}
-              className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+              className="flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-semibold rounded-xl hover:from-red-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
-              Clear
+              <RotateCcw className="w-4 h-4" />
+              Clear Canvas
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Drawing indicator */}
+      {isCurrentDrawer && isGameActive && (
+        <div className="absolute top-4 right-4 glass-card px-4 py-2 rounded-xl">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-semibold text-slate-700">Drawing Mode</span>
+          </div>
+        </div>
+      )}
+
+      {/* Brush preview */}
+      {isCurrentDrawer && isGameActive && (
+        <div className="absolute bottom-4 right-4 glass-card p-3 rounded-xl">
+          <div 
+            className="rounded-full border-2 border-slate-300"
+            style={{
+              width: `${brushSize * 2}px`,
+              height: `${brushSize * 2}px`,
+              backgroundColor: brushColor,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }}
+          />
         </div>
       )}
     </div>

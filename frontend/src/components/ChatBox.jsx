@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, MessageCircle, Wifi, WifiOff, Target, Clock, Users } from 'lucide-react';
+import { Send, MessageCircle, Wifi, WifiOff, Target, Clock, Users, Sparkles, Crown } from 'lucide-react';
+import { motion } from 'framer-motion';
 import useGameStore from '../store/gameStore';
 import useAuthStore from '../store/authStore';
 import Button from './Button';
@@ -71,26 +72,44 @@ const ChatBox = ({
   };
 
   return (
-    <div className="card h-96 flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex items-center space-x-2">
-          <MessageCircle className="w-5 h-5 text-primary-600" />
-          <h3 className="font-semibold text-gray-900">Chat</h3>
-          {isSocketConnected ? (
-            <Wifi className="w-4 h-4 text-green-500" />
-          ) : (
-            <WifiOff className="w-4 h-4 text-red-500" />
-          )}
-        </div>
-        {isGameActive && (
-          <div className="flex items-center space-x-4 text-sm text-gray-600">
-            <div className="flex items-center space-x-1">
-              <Target className="w-4 h-4" />
-              <span>Round {currentRound}/{totalRounds}</span>
+    <div className="chat-container">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50/50">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+            <MessageCircle className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900">Chat</h3>
+            <div className="flex items-center space-x-2">
+              {isSocketConnected ? (
+                <>
+                  <Wifi className="w-3 h-3 text-emerald-500" />
+                  <span className="text-xs text-emerald-600 font-medium">Connected</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3 h-3 text-red-500" />
+                  <span className="text-xs text-red-600 font-medium">Disconnected</span>
+                </>
+              )}
             </div>
-            <div className="flex items-center space-x-1">
-              <Clock className="w-4 h-4" />
-              <span>{formatTimeRemaining(timeRemaining)}</span>
+          </div>
+        </div>
+        
+        {isGameActive && (
+          <div className="flex items-center space-x-4 text-sm">
+            <div className="glass-card px-3 py-1 rounded-lg">
+              <div className="flex items-center space-x-1">
+                <Target className="w-3 h-3 text-slate-600" />
+                <span className="font-semibold text-slate-700">Round {currentRound}/{totalRounds}</span>
+              </div>
+            </div>
+            <div className="glass-card px-3 py-1 rounded-lg">
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3 text-slate-600" />
+                <span className="font-semibold text-slate-700">{formatTimeRemaining(timeRemaining)}</span>
+              </div>
             </div>
           </div>
         )}
@@ -98,137 +117,159 @@ const ChatBox = ({
 
       {/* Connection Status */}
       {!isSocketConnected && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-400 p-4"
+        >
           <div className="flex items-center">
-            <WifiOff className="w-4 h-4 text-yellow-400 mr-2" />
-            <p className="text-sm text-yellow-700">
+            <WifiOff className="w-4 h-4 text-amber-500 mr-3" />
+            <p className="text-sm font-medium text-amber-700">
               Connecting to chat server...
             </p>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Game Status */}
       {isGameActive && (
-        <div className="bg-blue-50 border-l-4 border-blue-400 p-3">
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-400 p-4"
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <MessageCircle className="w-4 h-4 text-blue-400 mr-2" />
-              <p className="text-sm text-blue-700">
+              <MessageCircle className="w-4 h-4 text-blue-500 mr-3" />
+              <p className="text-sm font-medium text-blue-700">
                 {isCurrentDrawer ? 
-                  'You are drawing! Others are guessing.' : 
-                  'Someone is drawing. Type your guess below!'
+                  '🎨 You are drawing! Others are guessing.' : 
+                  '👀 Someone is drawing. Type your guess below!'
                 }
               </p>
             </div>
             <div className="flex items-center space-x-2">
               {!isCurrentDrawer && guessProgress.total > 0 && (
-                <div className="bg-green-100 px-2 py-1 rounded text-xs font-medium text-green-800">
+                <div className="bg-gradient-to-r from-emerald-100 to-teal-100 px-3 py-1 rounded-full text-xs font-semibold text-emerald-800 border border-emerald-200">
+                  <Users className="w-3 h-3 inline mr-1" />
                   {guessProgress.guessed}/{guessProgress.total} guessed
                 </div>
               )}
               {isCurrentDrawer && currentWord && (
-                <div className="bg-blue-100 px-2 py-1 rounded text-xs font-medium">
+                <div className="bg-gradient-to-r from-blue-100 to-indigo-100 px-3 py-1 rounded-full text-xs font-semibold text-blue-800 border border-blue-200">
+                  <Sparkles className="w-3 h-3 inline mr-1" />
                   Word: {currentWord}
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="chat-messages">
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>No messages yet. Start the conversation!</p>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-12"
+          >
+            <div className="w-16 h-16 bg-gradient-to-br from-slate-200 to-slate-300 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <MessageCircle className="w-8 h-8 text-slate-400" />
+            </div>
+            <p className="text-slate-500 font-medium">No messages yet</p>
+            <p className="text-slate-400 text-sm mt-1">Start the conversation!</p>
+          </motion.div>
         ) : (
           messages.map((msg, index) => (
-            <div key={index} className="flex flex-col">
-              <div className="flex items-center space-x-2 mb-1">
-                <span className="font-medium text-sm text-primary-600">
+            <motion.div 
+              key={index} 
+              className="flex flex-col"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <div className="flex items-center space-x-2 mb-2">
+                <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">
+                    {(msg.username || 'Unknown').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <span className="font-semibold text-sm text-slate-700">
                   {msg.username || 'Unknown'}
                 </span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-slate-400">
                   {formatTime(msg.timestamp || Date.now())}
                 </span>
                 {msg.isCorrectGuess && (
-                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                    Correct!
-                  </span>
+                  <div className="flex items-center space-x-1 bg-gradient-to-r from-emerald-100 to-teal-100 px-2 py-1 rounded-full">
+                    <Crown className="w-3 h-3 text-emerald-600" />
+                    <span className="text-xs font-semibold text-emerald-700">Correct!</span>
+                  </div>
                 )}
               </div>
-              <div className={`rounded-lg px-3 py-2 max-w-xs ${
+              <div className={`rounded-xl px-4 py-3 max-w-xs shadow-sm ${
                 msg.isCorrectGuess 
-                  ? 'bg-green-100 border border-green-200' 
+                  ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200' 
                   : msg.isSystemMessage 
-                    ? 'bg-yellow-100 border border-yellow-200' 
-                    : 'bg-gray-100'
+                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200' 
+                    : 'bg-gradient-to-r from-slate-50 to-gray-50 border border-slate-200'
               }`}>
-                <p className="text-sm text-gray-900">{msg.message || ''}</p>
+                <p className="text-sm text-slate-800 font-medium">{msg.message || ''}</p>
               </div>
-            </div>
+            </motion.div>
           ))
         )}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="chat-input-container">
         {shouldShowGuessInput ? (
           // Guess input during game for non-drawers
-          <form onSubmit={handleSendGuess} className="flex space-x-2">
-            <div className="flex-1 relative">
+          <form onSubmit={handleSendGuess} className="space-y-3">
+            <div className="relative">
               <input
                 type="text"
                 value={guessInput}
                 onChange={(e) => onGuessInputChange && onGuessInputChange(e.target.value)}
-                placeholder={isSocketConnected ? "Type your guess..." : "Connecting..."}
-                className="input text-sm w-full pr-8"
+                placeholder={isSocketConnected ? "🎯 Type your guess..." : "Connecting..."}
+                className="input text-sm w-full pr-16"
                 maxLength={50}
                 disabled={!isSocketConnected}
                 autoComplete="off"
               />
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-slate-400 font-medium">
                 {guessInput.length}/50
               </div>
             </div>
             <Button 
               type="submit" 
-              size="sm" 
-              disabled={!guessInput.trim() || !isSocketConnected}
-              className="bg-green-500 hover:bg-green-600"
+              size="sm"
+              disabled={!isSocketConnected || !guessInput.trim()}
+              className="w-full"
             >
-              <Send className="w-4 h-4" />
+              <Target className="w-4 h-4 mr-2" />
+              Submit Guess
             </Button>
           </form>
         ) : (
           // Regular chat input
-          <form onSubmit={handleSendMessage} className="flex space-x-2">
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={
-                  !isSocketConnected ? "Connecting..." :
-                  isGameActive && isCurrentDrawer ? "You can't chat while drawing..." :
-                  "Type a message..."
-                }
-                className="input text-sm w-full pr-8"
-                maxLength={200}
-                disabled={!isSocketConnected || (isGameActive && isCurrentDrawer)}
-              />
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
-                {message.length}/200
-              </div>
-            </div>
+          <form onSubmit={handleSendMessage} className="flex space-x-3">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder={isSocketConnected ? "💬 Type a message..." : "Connecting..."}
+              className="input flex-1 text-sm"
+              maxLength={200}
+              disabled={!isSocketConnected}
+            />
             <Button 
               type="submit" 
-              size="sm" 
-              disabled={!message.trim() || !isSocketConnected || (isGameActive && isCurrentDrawer)}
+              size="sm"
+              disabled={!isSocketConnected || !message.trim()}
+              className="px-4"
             >
               <Send className="w-4 h-4" />
             </Button>

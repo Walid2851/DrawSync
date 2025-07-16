@@ -8,7 +8,11 @@ import {
   LogOut, 
   Copy,
   Search,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  Palette,
+  Clock,
+  Crown
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -110,28 +114,40 @@ const Dashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="glass-card border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <Gamepad2 className="h-8 w-8 text-primary-600" />
-              <h1 className="text-2xl font-bold text-gray-900">DrawSync</h1>
-            </div>
+            <motion.div 
+              className="flex items-center space-x-4"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Gamepad2 className="h-6 w-6 text-white" />
+              </div>
+              <h1 className="text-2xl font-bold gradient-text">DrawSync</h1>
+            </motion.div>
             
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">
+            <motion.div 
+              className="flex items-center space-x-4"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="flex items-center space-x-3 glass-card px-4 py-2 rounded-xl">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-semibold">
                     {user?.username?.charAt(0).toUpperCase()}
                   </span>
                 </div>
-                <span className="text-gray-700 font-medium">{user?.username}</span>
+                <span className="text-slate-700 font-medium">{user?.username}</span>
               </div>
               
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={handleLogout}
                 className="flex items-center space-x-2"
@@ -139,7 +155,7 @@ const Dashboard = () => {
                 <LogOut className="w-4 h-4" />
                 <span>Logout</span>
               </Button>
-            </div>
+            </motion.div>
           </div>
         </div>
       </header>
@@ -149,21 +165,58 @@ const Dashboard = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12"
         >
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {user?.username}!
-          </h2>
-          <p className="text-gray-600">
-            Create a new room or join an existing one to start drawing with friends
-          </p>
+          <motion.h2 
+            className="text-4xl font-bold text-slate-900 mb-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            Welcome back, <span className="gradient-text">{user?.username}</span>! 👋
+          </motion.h2>
+          <motion.p 
+            className="text-slate-600 text-lg max-w-2xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            Ready to create some amazing drawings with friends? Create a new room or join an existing one to start your artistic journey!
+          </motion.p>
+
+          {/* Feature Highlights */}
+          <motion.div 
+            className="flex items-center justify-center space-x-8 mt-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <div className="flex items-center space-x-2 text-slate-600">
+              <Users className="w-5 h-5" />
+              <span className="text-sm font-medium">Multiplayer</span>
+            </div>
+            <div className="flex items-center space-x-2 text-slate-600">
+              <Palette className="w-5 h-5" />
+              <span className="text-sm font-medium">Real-time Drawing</span>
+            </div>
+            <div className="flex items-center space-x-2 text-slate-600">
+              <Sparkles className="w-5 h-5" />
+              <span className="text-sm font-medium">Instant Sync</span>
+            </div>
+          </motion.div>
         </motion.div>
 
         {/* Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
+        <motion.div 
+          className="flex flex-col sm:flex-row gap-4 mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
           <Button
             onClick={() => setShowCreateRoom(true)}
-            className="flex items-center space-x-2"
+            className="flex items-center space-x-2 btn-lg"
           >
             <Plus className="w-5 h-5" />
             <span>Create New Room</span>
@@ -178,53 +231,67 @@ const Dashboard = () => {
             <RefreshCw className="w-5 h-5" />
             <span>Refresh Rooms</span>
           </Button>
-        </div>
+        </motion.div>
 
         {/* Search */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+        <motion.div 
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+        >
+          <div className="relative max-w-md mx-auto">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
             <Input
               placeholder="Search rooms by name or code..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-12"
             />
           </div>
-        </div>
+        </motion.div>
 
         {/* Rooms Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredRooms.map((room) => (
+        <motion.div 
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7 }}
+        >
+          {filteredRooms.map((room, index) => (
             <motion.div
               key={room.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
-              className="card p-6 hover:shadow-lg transition-shadow"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: index * 0.1 }}
+              className="room-card"
+              onClick={() => handleJoinRoom(room)}
             >
               <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 truncate">
+                <h3 className="text-xl font-bold text-slate-900 truncate">
                   {room.name}
                 </h3>
-                <div className="flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm text-gray-600">
+                <div className="flex items-center space-x-2 glass-card px-3 py-1 rounded-lg">
+                  <Users className="w-4 h-4 text-slate-600" />
+                  <span className="text-sm font-semibold text-slate-700">
                     {room.current_players}/{room.max_players}
                   </span>
                 </div>
               </div>
 
-              <div className="space-y-3 mb-4">
+              <div className="space-y-4 mb-6">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Room Code:</span>
+                  <span className="text-sm text-slate-600 font-medium">Room Code:</span>
                   <div className="flex items-center space-x-2">
-                    <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
+                    <code className="bg-slate-100 px-3 py-1.5 rounded-lg text-sm font-mono font-semibold text-slate-800">
                       {room.room_code}
                     </code>
                     <button
-                      onClick={() => copyRoomCode(room.room_code)}
-                      className="text-gray-400 hover:text-gray-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyRoomCode(room.room_code);
+                      }}
+                      className="text-slate-400 hover:text-slate-600 transition-colors duration-200"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
@@ -232,59 +299,92 @@ const Dashboard = () => {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Status:</span>
-                  <span className={`text-sm px-2 py-1 rounded-full ${
+                  <span className="text-sm text-slate-600 font-medium">Status:</span>
+                  <span className={`text-sm px-3 py-1.5 rounded-full font-semibold ${
                     room.is_active 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
+                      ? 'bg-emerald-100 text-emerald-800' 
+                      : 'bg-slate-100 text-slate-800'
                   }`}>
-                    {room.is_active ? 'Active' : 'Inactive'}
+                    {room.is_active ? '🟢 Active' : '⚪ Inactive'}
                   </span>
                 </div>
               </div>
 
               <Button
-                onClick={() => handleJoinRoom(room)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleJoinRoom(room);
+                }}
                 disabled={room.current_players >= room.max_players || !room.is_active}
                 className="w-full"
+                variant={room.current_players >= room.max_players || !room.is_active ? "secondary" : "primary"}
               >
                 {room.current_players >= room.max_players 
-                  ? 'Room Full' 
+                  ? '🚫 Room Full' 
                   : !room.is_active 
-                    ? 'Room Inactive' 
-                    : 'Join Room'
+                    ? '⏸️ Room Inactive' 
+                    : '🎨 Join Room'
                 }
               </Button>
             </motion.div>
           ))}
-        </div>
+        </motion.div>
 
         {filteredRooms.length === 0 && !isLoading && (
-          <div className="text-center py-12">
-            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+          <motion.div 
+            className="text-center py-16"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+          >
+            <div className="w-24 h-24 bg-gradient-to-br from-slate-200 to-slate-300 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Users className="w-12 h-12 text-slate-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-slate-900 mb-3">
               No rooms found
             </h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'Try adjusting your search terms' : 'Create the first room to get started!'}
+            <p className="text-slate-600 text-lg max-w-md mx-auto">
+              {searchTerm ? 'Try adjusting your search terms' : 'Be the first to create a room and start drawing with friends!'}
             </p>
-          </div>
+            {!searchTerm && (
+              <Button
+                onClick={() => setShowCreateRoom(true)}
+                className="mt-6"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Create First Room
+              </Button>
+            )}
+          </motion.div>
         )}
       </div>
 
       {/* Create Room Modal */}
       {showCreateRoom && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <motion.div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="card p-6 w-full max-w-md"
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="card p-8 w-full max-w-md"
           >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Create New Room
-            </h3>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Plus className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">
+                Create New Room
+              </h3>
+              <p className="text-slate-600">
+                Set up your drawing space and invite friends to join
+              </p>
+            </div>
             
-            <form onSubmit={handleCreateRoom} className="space-y-4">
+            <form onSubmit={handleCreateRoom} className="space-y-6">
               <Input
                 label="Room Name"
                 value={createRoomData.name}
@@ -292,12 +392,12 @@ const Dashboard = () => {
                   ...prev,
                   name: e.target.value
                 }))}
-                placeholder="Enter room name"
+                placeholder="Enter a creative room name"
                 required
               />
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Max Players
                 </label>
                 <select
@@ -315,7 +415,7 @@ const Dashboard = () => {
                 </select>
               </div>
               
-              <div className="flex items-center">
+              <div className="flex items-center space-x-3 p-4 bg-slate-50 rounded-xl">
                 <input
                   type="checkbox"
                   id="private"
@@ -324,18 +424,19 @@ const Dashboard = () => {
                     ...prev,
                     is_private: e.target.checked
                   }))}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
                 />
-                <label htmlFor="private" className="ml-2 text-sm text-gray-700">
-                  Private Room
+                <label htmlFor="private" className="text-sm text-slate-700 font-medium">
+                  Make this room private (invite-only)
                 </label>
               </div>
               
-              <div className="flex space-x-3">
+              <div className="flex space-x-4 pt-4">
                 <Button
                   type="submit"
-                  className="flex-1"
+                  className="flex-1 btn-lg"
                 >
+                  <Plus className="w-5 h-5 mr-2" />
                   Create Room
                 </Button>
                 <Button
@@ -349,7 +450,7 @@ const Dashboard = () => {
               </div>
             </form>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </div>
   );

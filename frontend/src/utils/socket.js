@@ -167,6 +167,9 @@ class SocketManager {
       case 'all_guessed':
         console.log('🎉 All players guessed correctly:', message);
         break;
+      case 'round_ended':
+        console.log('⏹️ Round ended:', message);
+        break;
       case 'player_ready':
         console.log('✅ Player ready:', message);
         break;
@@ -175,9 +178,6 @@ class SocketManager {
         break;
       case 'round_started':
         console.log('🔄 Round started:', message);
-        break;
-      case 'round_ended':
-        console.log('⏹️ Round ended:', message);
         break;
       case 'game_ended':
         console.log('🏁 Game ended:', message);

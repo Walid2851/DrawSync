@@ -35,6 +35,10 @@ const useGameStore = create((set, get) => ({
   // UI state
   isLoading: false,
   error: null,
+  showRoundEndPopup: false,
+  roundEndData: null,
+  showGameEndPopup: false,
+  gameEndData: null,
 
   // Actions
   setSocketConnected: (connected) => {
@@ -285,6 +289,34 @@ const useGameStore = create((set, get) => ({
     });
   },
 
+  showRoundEndPopup: (roundData) => {
+    set({
+      showRoundEndPopup: true,
+      roundEndData: roundData,
+    });
+  },
+
+  hideRoundEndPopup: () => {
+    set({
+      showRoundEndPopup: false,
+      roundEndData: null,
+    });
+  },
+
+  showGameEndPopup: (gameData) => {
+    set({
+      showGameEndPopup: true,
+      gameEndData: gameData,
+    });
+  },
+
+  hideGameEndPopup: () => {
+    set({
+      showGameEndPopup: false,
+      gameEndData: null,
+    });
+  },
+
   // Socket event handlers
   handleSocketConnected: (data) => {
     set({ isSocketConnected: data.connected });
@@ -385,20 +417,50 @@ const useGameStore = create((set, get) => ({
   },
 
   handleRoundEnded: (data) => {
-    set({
-      currentWord: '',
-      drawingData: [],
+    set((state) => {
+      // Show round end popup only if it's the final round
+      const isFinalRound = data.round >= state.totalRounds;
+      
+      if (isFinalRound) {
+        const roundData = {
+          roundNumber: data.round,
+          word: data.word,
+          players: state.players,
+        };
+        
+        return {
+          currentWord: '',
+          drawingData: [],
+          showRoundEndPopup: true,
+          roundEndData: roundData,
+        };
+      } else {
+        // Just update state without showing popup for non-final rounds
+        return {
+          currentWord: '',
+          drawingData: [],
+        };
+      }
     });
-    console.log('Round ended:', data);
   },
 
   handleGameEnded: (data) => {
-    set({
-      isGameActive: false,
-      currentRound: 0,
-      timeRemaining: 0,
-      currentWord: '',
-      drawingData: [],
+    set((state) => {
+      // Show game end popup with final scores
+      const gameData = {
+        finalScores: data.final_scores || {},
+        players: state.players,
+      };
+      
+      return {
+        isGameActive: false,
+        currentRound: 0,
+        timeRemaining: 0,
+        currentWord: '',
+        drawingData: [],
+        showGameEndPopup: true,
+        gameEndData: gameData,
+      };
     });
   },
 
