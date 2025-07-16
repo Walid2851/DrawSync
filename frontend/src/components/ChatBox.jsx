@@ -4,25 +4,25 @@ import useGameStore from '../store/gameStore';
 import useAuthStore from '../store/authStore';
 import Button from './Button';
 
-const ChatBox = () => {
+const ChatBox = ({ 
+  messages = [], 
+  onSendMessage, 
+  guessInput = '', 
+  onGuessInputChange, 
+  onSendGuess, 
+  isGameActive = false 
+}) => {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef(null);
   
   const { user } = useAuthStore();
   const {
-    chatMessages,
-    guessInput,
-    setGuessInput,
-    sendChatMessage,
-    sendGuess,
-    isGameActive,
-    currentWord,
-    isDrawing,
     isSocketConnected,
     gameState,
     timeRemaining,
     currentRound,
     totalRounds,
+    currentWord,
   } = useGameStore();
 
   // Check if current user is the drawer
@@ -35,25 +35,12 @@ const ChatBox = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [chatMessages]);
+  }, [messages]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (message.trim() && isSocketConnected) {
-      // Add message to local state immediately for better UX
-      const localMessage = {
-        username: user?.username || 'You',
-        message: message.trim(),
-        timestamp: Date.now(),
-        isCorrectGuess: false,
-        isSystemMessage: false,
-      };
-      
-      // Add to local state
-      useGameStore.getState().addChatMessage(localMessage);
-      
-      // Send to server
-      sendChatMessage(message.trim());
+    if (message.trim() && isSocketConnected && onSendMessage) {
+      onSendMessage(message.trim());
       setMessage('');
     } else if (!isSocketConnected) {
       console.error('Cannot send message: Socket not connected');
@@ -62,8 +49,8 @@ const ChatBox = () => {
 
   const handleSendGuess = (e) => {
     e.preventDefault();
-    if (guessInput.trim() && isSocketConnected) {
-      sendGuess();
+    if (guessInput.trim() && isSocketConnected && onSendGuess) {
+      onSendGuess();
     } else if (!isSocketConnected) {
       console.error('Cannot send guess: Socket not connected');
     }
@@ -144,13 +131,13 @@ const ChatBox = () => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {chatMessages.length === 0 ? (
+        {messages.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
             <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p>No messages yet. Start the conversation!</p>
           </div>
         ) : (
-          chatMessages.map((msg, index) => (
+          messages.map((msg, index) => (
             <div key={index} className="flex flex-col">
               <div className="flex items-center space-x-2 mb-1">
                 <span className="font-medium text-sm text-primary-600">
@@ -189,7 +176,7 @@ const ChatBox = () => {
               <input
                 type="text"
                 value={guessInput}
-                onChange={(e) => setGuessInput(e.target.value)}
+                onChange={(e) => onGuessInputChange && onGuessInputChange(e.target.value)}
                 placeholder={isSocketConnected ? "Type your guess..." : "Connecting..."}
                 className="input text-sm w-full pr-8"
                 maxLength={50}

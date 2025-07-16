@@ -1,211 +1,198 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Play, 
-  Settings, 
-  Palette,
-  RotateCcw,
-  Users,
-  MessageCircle,
-  Timer,
-  Target,
-  SkipForward,
-  Volume2,
-  VolumeX
-} from 'lucide-react';
-import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import useAuthStore from '../store/authStore';
-import useGameStore from '../store/gameStore';
-import socketManager from '../utils/socket';
 import DrawingCanvas from '../components/DrawingCanvas';
 import ChatBox from '../components/ChatBox';
-import PlayerList from '../components/PlayerList';
 import Button from '../components/Button';
+import useGameStore from '../store/gameStore';
+import useAuthStore from '../store/authStore';
+import socketManager from '../utils/socket';
 import { roomsAPI } from '../utils/api';
 
 const GameRoom = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const { user, token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const {
-    currentRoom,
     players,
+    isInRoom,
     isGameActive,
-    gameState,
     currentRound,
     totalRounds,
     timeRemaining,
     currentWord,
-    brushColor,
-    brushSize,
-    setBrushColor,
-    setBrushSize,
-    setReady,
-    setSocketConnected,
+    isDrawing,
+    drawingData,
+    chatMessages,
+    guessInput,
+    isSocketConnected,
+    isLoading,
+    error,
+    joinRoom,
     leaveRoom,
-    clearDrawing,
-    updateTimeRemaining,
+    deleteRoom,
+    setPlayers,
+    addChatMessageFromSocket,
+    addCorrectGuessMessage,
+    setGuessInput,
+    sendGuess,
+    sendChatMessage,
+    startGame,
+    setReady,
+    skipTurn,
+    resetGameState,
+    handleSocketConnected,
+    handleAuthenticated,
+    handleRoomJoined,
+    handlePlayerJoined,
+    handlePlayerLeft,
     handleGameStarted,
     handleRoundStarted,
+    handleWordAssigned,
     handleCorrectGuess,
     handleRoundEnded,
     handleGameEnded,
+    handleTimeUpdate,
+    handleCanvasCleared,
+    handleRoomDeleted,
   } = useGameStore();
 
-  // UI state
-  const [showSettings, setShowSettings] = useState(false);
-  const [showPlayerList, setShowPlayerList] = useState(false);
-  const [showChat, setShowChat] = useState(true);
   const [isReady, setIsReady] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const timeIntervalRef = useRef(null);
 
-  // Define event handlers using useCallback to avoid dependency issues
-  const handleSocketConnected = useCallback((data) => {
-    console.log('Socket connection state changed:', data);
-    setSocketConnected(data.connected);
-    
-    // If connected and authenticated, join the room
-    if (data.connected) {
-      console.log('Socket connected, joining room:', roomId);
-      socketManager.joinRoom(roomId);
-    }
-  }, [roomId, setSocketConnected]);
+  // Socket event handlers
+  const handleSocketConnectedEvent = useCallback((data) => {
+    handleSocketConnected(data);
+  }, [handleSocketConnected]);
 
-  const handleAuthenticated = useCallback((data) => {
-    console.log('Authentication successful, joining room:', roomId);
-    socketManager.joinRoom(roomId);
-  }, [roomId]);
+  const handleAuthenticatedEvent = useCallback((data) => {
+    handleAuthenticated(data);
+    // Join room after successful authentication
+    console.log('Authentication successful, joining room...');
+    joinRoom(parseInt(roomId));
+  }, [handleAuthenticated, joinRoom, roomId]);
 
-  const handleRoomJoined = useCallback((data) => {
-    console.log('Room joined successfully:', data);
+  const handleRoomJoinedEvent = useCallback((data) => {
+    handleRoomJoined(data);
     toast.success('Joined room successfully!');
-    // Fetch players after joining room
-    const fetchPlayers = async () => {
-      try {
-        const response = await roomsAPI.getRoomPlayers(roomId);
-        if (response.data && response.data.players) {
-          useGameStore.getState().setPlayers(response.data.players);
-        }
-      } catch (err) {
-        console.error('Failed to fetch players:', err);
-      }
-    };
-    fetchPlayers();
-  }, [roomId]);
+  }, [handleRoomJoined]);
 
-  const handlePlayerJoined = useCallback((data) => {
-    toast.success(`${data.username} joined the room`);
-    // Fetch updated player list
-    const fetchPlayers = async () => {
-      try {
-        const response = await roomsAPI.getRoomPlayers(roomId);
-        if (response.data && response.data.players) {
-          useGameStore.getState().setPlayers(response.data.players);
-        }
-      } catch (err) {
-        console.error('Failed to fetch players:', err);
-      }
-    };
-    fetchPlayers();
-  }, [roomId]);
+  const handlePlayerJoinedEvent = useCallback((data) => {
+    handlePlayerJoined(data);
+    toast(`${data.username} joined the room`, {
+      icon: '👤',
+    });
+  }, [handlePlayerJoined]);
 
-  const handlePlayerLeft = useCallback((data) => {
-    toast.info(`${data.username} left the room`);
-    // Fetch updated player list
-    const fetchPlayers = async () => {
-      try {
-        const response = await roomsAPI.getRoomPlayers(roomId);
-        if (response.data && response.data.players) {
-          useGameStore.getState().setPlayers(response.data.players);
-        }
-      } catch (err) {
-        console.error('Failed to fetch players:', err);
-      }
-    };
-    fetchPlayers();
-  }, [roomId]);
-
-  const handleChatMessage = useCallback((data) => {
-    console.log('Received chat_message event:', data);
-    useGameStore.getState().addChatMessageFromSocket(data);
-  }, []);
+  const handlePlayerLeftEvent = useCallback((data) => {
+    handlePlayerLeft(data);
+    toast(`${data.username} left the room`, {
+      icon: '👤',
+    });
+  }, [handlePlayerLeft]);
 
   const handleGameStartedEvent = useCallback((data) => {
-    console.log('Game started event received:', data);
-    toast.success('Game started!');
     handleGameStarted(data);
+    toast.success('Game started!');
   }, [handleGameStarted]);
 
   const handleRoundStartedEvent = useCallback((data) => {
-    console.log('Round started event received:', data);
-    toast.success(`Round ${data.round} started!`);
     handleRoundStarted(data);
+    toast.success(`Round ${data.round} started!`);
   }, [handleRoundStarted]);
 
+  const handleWordAssignedEvent = useCallback((data) => {
+    handleWordAssigned(data);
+    if (data.word && data.word !== '_' * data.word.length) {
+      toast.success(`Your word: ${data.word}`);
+    }
+  }, [handleWordAssigned]);
+
   const handleCorrectGuessEvent = useCallback((data) => {
-    console.log('Correct guess event received:', data);
-    toast.success(`${data.username} guessed correctly!`);
     handleCorrectGuess(data);
-  }, [handleCorrectGuess]);
+    addCorrectGuessMessage(data);
+    toast.success(`${data.username} guessed correctly!`);
+  }, [handleCorrectGuess, addCorrectGuessMessage]);
 
   const handleRoundEndedEvent = useCallback((data) => {
-    console.log('Round ended event received:', data);
-    toast.info('Round ended!');
     handleRoundEnded(data);
+    toast(`Round ${data.round} ended! Word was: ${data.word}`, {
+      icon: '⏹️',
+    });
   }, [handleRoundEnded]);
 
   const handleGameEndedEvent = useCallback((data) => {
-    console.log('Game ended event received:', data);
-    toast.success('Game ended!');
     handleGameEnded(data);
+    toast.success('Game ended!');
   }, [handleGameEnded]);
 
-  const handleTimeUpdate = useCallback((data) => {
-    updateTimeRemaining(data.time_remaining);
-  }, [updateTimeRemaining]);
+  const handleTimeUpdateEvent = useCallback((data) => {
+    handleTimeUpdate(data);
+  }, [handleTimeUpdate]);
 
-  const handleDrawerChanged = useCallback((data) => {
-    toast.info(`${data.username} is now drawing`);
-  }, []);
+  const handleCanvasClearedEvent = useCallback((data) => {
+    handleCanvasCleared(data);
+    toast('Canvas cleared', {
+      icon: '🧹',
+    });
+  }, [handleCanvasCleared]);
 
-  const handleWordAssigned = useCallback((data) => {
-    if (data.user_id === user?.id) {
-      toast.success(`Your word: ${data.word}`);
-    }
-  }, [user?.id]);
+  const handleRoomDeletedEvent = useCallback((data) => {
+    handleRoomDeleted(data);
+    toast.error('Room has been deleted');
+    navigate('/dashboard');
+  }, [handleRoomDeleted, navigate]);
 
-  const handleGameStateUpdate = useCallback((data) => {
-    console.log('Game state update received:', data);
-    // Update the game state in the store
-    useGameStore.getState().setGameState(data);
-  }, []);
+  const handleChatMessageEvent = useCallback((data) => {
+    addChatMessageFromSocket(data);
+  }, [addChatMessageFromSocket]);
 
-  const handleCanvasCleared = useCallback((data) => {
-    console.log('Canvas cleared event received:', data);
-    // Clear the drawing data in the store
-    useGameStore.getState().clearDrawing();
-  }, []);
-
-  const handleDrawData = useCallback((data) => {
+  const handleDrawDataEvent = useCallback((data) => {
+    // Drawing data is handled by the DrawingCanvas component
     console.log('Draw data received:', data);
-    // Add the drawing data to the store
-    if (data.data) {
-      useGameStore.getState().addDrawingData(data.data);
-    }
   }, []);
 
-  const colors = [
-    '#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00',
-    '#FF00FF', '#00FFFF', '#FFA500', '#800080', '#008000'
-  ];
+  const handleGameStateEvent = useCallback((data) => {
+    // Game state updates are handled by the store
+    console.log('Game state update:', data);
+  }, []);
 
-  const brushSizes = [2, 4, 6, 8, 12, 16];
+  // Game controls
+  const handleStartGame = () => {
+    startGame();
+  };
+
+  const handleReadyToggle = () => {
+    const newReadyState = !isReady;
+    setIsReady(newReadyState);
+    setReady(newReadyState);
+  };
+
+  const handleSkipTurn = () => {
+    skipTurn();
+  };
+
+  const handleLeaveRoom = () => {
+    leaveRoom();
+    navigate('/dashboard');
+  };
+
+  const handleDeleteRoom = () => {
+    if (window.confirm('Are you sure you want to delete this room? All players will be disconnected.')) {
+      deleteRoom();
+      navigate('/dashboard');
+    }
+  };
+
+  const handleSendMessage = (message) => {
+    sendChatMessage(message);
+  };
+
+  const handleSendGuess = () => {
+    sendGuess();
+  };
 
   // Check if current user is the drawer
-  const isCurrentDrawer = gameState?.current_drawer_id === user?.id;
+  const isCurrentDrawer = isDrawing;
 
   useEffect(() => {
     if (!token) {
@@ -218,12 +205,31 @@ const GameRoom = () => {
     // Connect to socket
     socketManager.connect(token);
 
+    // Register all event listeners
+    socketManager.on('socket_connected', handleSocketConnectedEvent);
+    socketManager.on('authenticated', handleAuthenticatedEvent);
+    socketManager.on('room_joined', handleRoomJoinedEvent);
+    socketManager.on('player_joined', handlePlayerJoinedEvent);
+    socketManager.on('player_left', handlePlayerLeftEvent);
+    socketManager.on('chat_message', handleChatMessageEvent);
+    socketManager.on('game_started', handleGameStartedEvent);
+    socketManager.on('round_started', handleRoundStartedEvent);
+    socketManager.on('correct_guess', handleCorrectGuessEvent);
+    socketManager.on('round_ended', handleRoundEndedEvent);
+    socketManager.on('game_ended', handleGameEndedEvent);
+    socketManager.on('time_update', handleTimeUpdateEvent);
+    socketManager.on('word_assigned', handleWordAssignedEvent);
+    socketManager.on('game_state', handleGameStateEvent);
+    socketManager.on('canvas_cleared', handleCanvasClearedEvent);
+    socketManager.on('draw_data', handleDrawDataEvent);
+    socketManager.on('room_deleted', handleRoomDeletedEvent);
+
     // Initial fetch of players
     const fetchPlayers = async () => {
       try {
         const response = await roomsAPI.getRoomPlayers(roomId);
         if (response.data && response.data.players) {
-          useGameStore.getState().setPlayers(response.data.players);
+          setPlayers(response.data.players);
         }
       } catch (err) {
         console.error('Failed to fetch players:', err);
@@ -231,269 +237,170 @@ const GameRoom = () => {
     };
     fetchPlayers();
 
-    // Register all event listeners
-    socketManager.on('socket_connected', handleSocketConnected);
-    socketManager.on('authenticated', handleAuthenticated);
-    socketManager.on('room_joined', handleRoomJoined);
-    socketManager.on('player_joined', handlePlayerJoined);
-    socketManager.on('player_left', handlePlayerLeft);
-    socketManager.on('chat_message', handleChatMessage);
-    socketManager.on('game_started', handleGameStartedEvent);
-    socketManager.on('round_started', handleRoundStartedEvent);
-    socketManager.on('correct_guess', handleCorrectGuessEvent);
-    socketManager.on('round_ended', handleRoundEndedEvent);
-    socketManager.on('game_ended', handleGameEndedEvent);
-    socketManager.on('time_update', handleTimeUpdate);
-    socketManager.on('drawer_changed', handleDrawerChanged);
-    socketManager.on('word_assigned', handleWordAssigned);
-    socketManager.on('game_state', handleGameStateUpdate);
-    socketManager.on('canvas_cleared', handleCanvasCleared);
-    socketManager.on('draw_data', handleDrawData);
-
-    // Initial fetch of players
-    fetchPlayers();
-
+    // Cleanup on unmount
     return () => {
-      // Clean up event listeners
-      socketManager.off('socket_connected', handleSocketConnected);
-      socketManager.off('authenticated', handleAuthenticated);
-      socketManager.off('room_joined', handleRoomJoined);
-      socketManager.off('player_joined', handlePlayerJoined);
-      socketManager.off('player_left', handlePlayerLeft);
-      socketManager.off('chat_message', handleChatMessage);
+      socketManager.off('socket_connected', handleSocketConnectedEvent);
+      socketManager.off('authenticated', handleAuthenticatedEvent);
+      socketManager.off('room_joined', handleRoomJoinedEvent);
+      socketManager.off('player_joined', handlePlayerJoinedEvent);
+      socketManager.off('player_left', handlePlayerLeftEvent);
+      socketManager.off('chat_message', handleChatMessageEvent);
       socketManager.off('game_started', handleGameStartedEvent);
       socketManager.off('round_started', handleRoundStartedEvent);
       socketManager.off('correct_guess', handleCorrectGuessEvent);
       socketManager.off('round_ended', handleRoundEndedEvent);
       socketManager.off('game_ended', handleGameEndedEvent);
-      socketManager.off('time_update', handleTimeUpdate);
-      socketManager.off('drawer_changed', handleDrawerChanged);
-      socketManager.off('word_assigned', handleWordAssigned);
-      socketManager.off('game_state', handleGameStateUpdate);
-      socketManager.off('canvas_cleared', handleCanvasCleared);
-      socketManager.off('draw_data', handleDrawData);
+      socketManager.off('time_update', handleTimeUpdateEvent);
+      socketManager.off('word_assigned', handleWordAssignedEvent);
+      socketManager.off('game_state', handleGameStateEvent);
+      socketManager.off('canvas_cleared', handleCanvasClearedEvent);
+      socketManager.off('draw_data', handleDrawDataEvent);
+      socketManager.off('room_deleted', handleRoomDeletedEvent);
     };
   }, [
     token,
-    navigate,
     roomId,
-    handleSocketConnected,
-    handleAuthenticated,
-    handleRoomJoined,
-    handlePlayerJoined,
-    handlePlayerLeft,
-    handleChatMessage,
+    navigate,
+    joinRoom,
+    setPlayers,
+    handleSocketConnectedEvent,
+    handleAuthenticatedEvent,
+    handleRoomJoinedEvent,
+    handlePlayerJoinedEvent,
+    handlePlayerLeftEvent,
+    handleChatMessageEvent,
     handleGameStartedEvent,
     handleRoundStartedEvent,
     handleCorrectGuessEvent,
     handleRoundEndedEvent,
     handleGameEndedEvent,
-    handleTimeUpdate,
-    handleDrawerChanged,
-    handleWordAssigned,
-    handleGameStateUpdate,
-    handleCanvasCleared,
-    handleDrawData
+    handleTimeUpdateEvent,
+    handleWordAssignedEvent,
+    handleGameStateEvent,
+    handleCanvasClearedEvent,
+    handleDrawDataEvent,
+    handleRoomDeletedEvent,
   ]);
 
-  const handleLeaveRoom = () => {
-    leaveRoom();
-    socketManager.disconnect();
-    navigate('/dashboard');
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-xl">Loading room...</div>
+      </div>
+    );
+  }
 
-  const handleStartGame = async () => {
-    try {
-      socketManager.startGame(roomId);
-    } catch (error) {
-      toast.error('Failed to start game');
-    }
-  };
-
-  const handleSkipTurn = () => {
-    if (isCurrentDrawer) {
-      socketManager.skipTurn();
-    }
-  };
-
-  const handleClearCanvas = () => {
-    if (isCurrentDrawer) {
-      clearDrawing();
-      socketManager.clearCanvas();
-    }
-  };
-
-  const handleReadyToggle = () => {
-    setIsReady(!isReady);
-    setReady(!isReady);
-  };
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-red-500 text-xl">Error: {error}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      {/* Header */}
+    <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              onClick={handleLeaveRoom}
-              className="flex items-center space-x-2"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Leave Room</span>
-            </Button>
-            
-            <div className="flex items-center space-x-2">
-              <Target className="w-5 h-5 text-primary-600" />
-              <h1 className="text-2xl font-bold text-gray-900">
-                Room: {currentRoom?.name || roomId}
-              </h1>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            {/* Game Status */}
-            {isGameActive && (
-              <div className="flex items-center space-x-4 bg-white px-4 py-2 rounded-lg shadow-sm">
-                <div className="flex items-center space-x-2">
-                  <Target className="w-4 h-4 text-primary-600" />
-                  <span className="text-sm font-medium">
-                    Round {currentRound}/{totalRounds}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Timer className="w-4 h-4 text-red-500" />
-                  <span className="text-sm font-medium text-red-600">
-                    {formatTime(timeRemaining)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Control Buttons */}
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPlayerList(!showPlayerList)}
-                className="flex items-center space-x-1"
-              >
-                <Users className="w-4 h-4" />
-                <span>Players</span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowChat(!showChat)}
-                className="flex items-center space-x-1"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>Chat</span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsMuted(!isMuted)}
-                className="flex items-center space-x-1"
-              >
-                {isMuted ? (
-                  <VolumeX className="w-4 h-4" />
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">Room {roomId}</h1>
+              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                <span>Players: {players.length}</span>
+                <span>Round: {currentRound}/{totalRounds}</span>
+                {isGameActive && <span>Time: {timeRemaining}s</span>}
+                {isSocketConnected ? (
+                  <span className="text-green-500">● Connected</span>
                 ) : (
-                  <Volume2 className="w-4 h-4" />
+                  <span className="text-red-500">● Disconnected</span>
                 )}
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              {!isGameActive && (
+                <>
+                  <Button
+                    onClick={handleReadyToggle}
+                    variant={isReady ? 'success' : 'secondary'}
+                  >
+                    {isReady ? 'Ready' : 'Not Ready'}
+                  </Button>
+                  <Button onClick={handleStartGame} variant="primary">
+                    Start Game
+                  </Button>
+                </>
+              )}
+              {isGameActive && isCurrentDrawer && (
+                <Button onClick={handleSkipTurn} variant="warning">
+                  Skip Turn
+                </Button>
+              )}
+              <Button onClick={handleLeaveRoom} variant="secondary">
+                Leave Room
+              </Button>
+              <Button onClick={handleDeleteRoom} variant="danger">
+                Delete Room
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Main Game Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Drawing Canvas */}
-          <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">Drawing Canvas</h2>
-                
-                {isGameActive && isCurrentDrawer && (
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleClearCanvas}
-                      className="flex items-center space-x-1"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      <span>Clear</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSkipTurn}
-                      className="flex items-center space-x-1"
-                    >
-                      <SkipForward className="w-4 h-4" />
-                      <span>Skip</span>
-                    </Button>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {/* Players Panel */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow-md p-4">
+              <h2 className="text-lg font-semibold mb-4">Players</h2>
+              <div className="space-y-2">
+                {players.map((player, index) => (
+                  <div
+                    key={`${player.id}-${index}`}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium">{player.username}</span>
+                      {player.ready && (
+                        <span className="text-green-500 text-sm">✓</span>
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-600">
+                      {player.score || 0} pts
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Game Area */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-md p-4">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold mb-2">Drawing Canvas</h2>
+                {isGameActive && (
+                  <div className="text-sm text-gray-600 mb-2">
+                    {isCurrentDrawer ? (
+                      <span>Your turn to draw! Word: {currentWord}</span>
+                    ) : (
+                      <span>Waiting for drawing... Word: {currentWord}</span>
+                    )}
                   </div>
                 )}
               </div>
-
               <DrawingCanvas width={800} height={600} />
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Game Controls */}
-            {!isGameActive && (
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Game Controls</h3>
-                <div className="space-y-3">
-                  <Button
-                    onClick={handleStartGame}
-                    className="w-full"
-                    disabled={players.length < 3}
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    Start Game
-                  </Button>
-                  
-                  <Button
-                    variant={isReady ? "default" : "outline"}
-                    onClick={handleReadyToggle}
-                    className="w-full"
-                  >
-                    {isReady ? "Ready" : "Not Ready"}
-                  </Button>
-                </div>
-                
-                {players.length < 3 && (
-                  <p className="text-sm text-gray-500 mt-2">
-                    Need at least 3 players to start
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Player List */}
-            {showPlayerList && (
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <PlayerList players={players} />
-              </div>
-            )}
-
-            {/* Chat */}
-            {showChat && (
-              <ChatBox />
-            )}
+          {/* Chat Panel */}
+          <div className="lg:col-span-1">
+            <ChatBox
+              messages={chatMessages}
+              onSendMessage={handleSendMessage}
+              guessInput={guessInput}
+              onGuessInputChange={setGuessInput}
+              onSendGuess={handleSendGuess}
+              isGameActive={isGameActive}
+            />
           </div>
         </div>
       </div>

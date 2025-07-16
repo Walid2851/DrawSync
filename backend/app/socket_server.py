@@ -5,23 +5,27 @@ import time
 import select
 from typing import Dict, List, Set, Optional
 from .config import settings
-from .services.game_service import game_service
 from .database import SessionLocal
 from .models.user import User
 from .models.game_session import GameSession
 from .core.security import verify_token
+from .core.words import word_manager
 
 class DrawSyncSocketServer:
-    """Raw Python socket server for DrawSync game"""
+    """Raw Python socket server for DrawSync game - Fixed version"""
     
     def __init__(self, host='localhost', port=8001):
         self.host = host
         self.port = port
         self.server_socket = None
         self.clients: Dict[str, Dict] = {}  # client_id -> client_info
-        self.rooms: Dict[int, Set[str]] = {}  # room_id -> set of client_ids
+        self.rooms: Dict[int, Dict] = {}  # room_id -> room_info
         self.running = False
         self.client_lock = threading.Lock()
+        
+        # Game state management
+        self.active_games = {}  # room_id -> game_state
+        self.game_timers = {}   # room_id -> timer_thread
         
     def start(self):
         """Start the socket server"""
@@ -79,6 +83,11 @@ class DrawSyncSocketServer:
         self.running = False
         if self.server_socket:
             self.server_socket.close()
+        
+        # Stop all game timers
+        for timer in self.game_timers.values():
+            if timer and timer.is_alive():
+                timer.cancel()
         
         # Close all client connections
         with self.client_lock:
@@ -180,6 +189,8 @@ class DrawSyncSocketServer:
             self._handle_skip_turn(client_id, message)
         elif message_type == 'clear_canvas':
             self._handle_clear_canvas(client_id, message)
+        elif message_type == 'delete_room':
+            self._handle_delete_room(client_id, message)
         else:
             print(f"❌ Unknown message type: {message_type}")
     
@@ -199,9 +210,8 @@ class DrawSyncSocketServer:
         if room_id not in self.rooms:
             return
         
-        # Create a copy of the set to avoid "Set changed size during iteration" error
-        client_ids = list(self.rooms[room_id])
-        for client_id in client_ids:
+        room_info = self.rooms[room_id]
+        for client_id in room_info['clients']:
             if client_id != skip_client_id:
                 self._send_message(client_id, message)
     
@@ -211,45 +221,56 @@ class DrawSyncSocketServer:
         if not token:
             self._send_message(client_id, {
                 'type': 'error',
-                'message': 'Authentication token required'
+                'message': 'Token required'
             })
             return
         
-        # Verify token and get user info
-        username = verify_token(token)
-        if not username:
-            self._send_message(client_id, {
-                'type': 'error',
-                'message': 'Invalid authentication token'
-            })
-            return
-        
-        # Get user from database
-        db = SessionLocal()
         try:
-            user = db.query(User).filter(User.username == username).first()
-            if not user:
+            # Verify token
+            username = verify_token(token)
+            
+            if not username:
                 self._send_message(client_id, {
                     'type': 'error',
-                    'message': 'User not found'
+                    'message': 'Invalid token'
                 })
                 return
             
-            # Update client info
-            with self.client_lock:
-                if client_id in self.clients:
-                    self.clients[client_id]['user_id'] = user.id
-                    self.clients[client_id]['username'] = user.username
-            
-            # Send authentication success
+            # Get user info from database
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.username == username).first()
+                if not user:
+                    self._send_message(client_id, {
+                        'type': 'error',
+                        'message': 'User not found'
+                    })
+                    return
+                
+                # Update client info
+                with self.client_lock:
+                    if client_id in self.clients:
+                        self.clients[client_id]['user_id'] = user.id
+                        self.clients[client_id]['username'] = user.username
+                
+                # Send authentication success
+                self._send_message(client_id, {
+                    'type': 'authenticated',
+                    'user_id': user.id,
+                    'username': user.username
+                })
+                
+                print(f"✅ Client {client_id} authenticated as {user.username}")
+                
+            finally:
+                db.close()
+                
+        except Exception as e:
+            print(f"❌ Authentication error: {e}")
             self._send_message(client_id, {
-                'type': 'authenticated',
-                'user_id': user.id,
-                'username': user.username
+                'type': 'error',
+                'message': 'Authentication failed'
             })
-            
-        finally:
-            db.close()
     
     def _handle_join_room(self, client_id: str, message: dict):
         """Handle client joining a room"""
@@ -269,11 +290,41 @@ class DrawSyncSocketServer:
             })
             return
         
-        # Add client to room
+        # Check if user is already in a room
+        current_room = client_info.get('room_id')
+        if current_room and current_room in self.rooms:
+            # Remove from current room first
+            self.rooms[current_room]['clients'].discard(client_id)
+            if not self.rooms[current_room]['clients']:
+                del self.rooms[current_room]
+        
+        # Add client to new room
         if room_id not in self.rooms:
-            self.rooms[room_id] = set()
-        self.rooms[room_id].add(client_id)
+            self.rooms[room_id] = {
+                'clients': set(),
+                'players': {},
+                'game_state': None,
+                'drawing_data': [],
+                'current_round': 0,
+                'max_rounds': 4,
+                'current_drawer_index': 0,
+                'current_word': '',
+                'time_remaining': 60,
+                'game_started': False,
+                'guessed_players': set(),
+                'round_start_time': None
+            }
+        
+        self.rooms[room_id]['clients'].add(client_id)
         client_info['room_id'] = room_id
+        
+        # Add player to room players
+        self.rooms[room_id]['players'][client_info['user_id']] = {
+            'id': client_info['user_id'],
+            'username': client_info['username'],
+            'score': 0,
+            'ready': False
+        }
         
         # Add player to database session
         db = SessionLocal()
@@ -316,24 +367,20 @@ class DrawSyncSocketServer:
         self._send_message(client_id, {
             'type': 'room_joined',
             'room_id': room_id,
-            'players': self._get_room_players(room_id)
+            'players': list(self.rooms[room_id]['players'].values())
         })
         
         # Send current game state to the new player
-        game_state = game_service.get_game_state(room_id)
-        if game_state:
-            self._send_message(client_id, {
-                'type': 'game_state',
-                **game_state
-            })
+        room_info = self.rooms[room_id]
+        if room_info['game_started']:
+            self._send_game_state_to_client(client_id, room_id)
             
             # Send all existing drawing data to the new player
-            if game_state.get('drawing_data'):
-                for drawing_point in game_state['drawing_data']:
-                    self._send_message(client_id, {
-                        'type': 'draw_data',
-                        'data': drawing_point
-                    })
+            for drawing_point in room_info['drawing_data']:
+                self._send_message(client_id, {
+                    'type': 'draw_data',
+                    'data': drawing_point
+                })
     
     def _handle_leave_room(self, client_id: str, message: dict):
         """Handle client leaving a room"""
@@ -343,7 +390,12 @@ class DrawSyncSocketServer:
         
         room_id = client_info.get('room_id')
         if room_id and room_id in self.rooms:
-            self.rooms[room_id].discard(client_id)
+            room_info = self.rooms[room_id]
+            room_info['clients'].discard(client_id)
+            
+            # Remove player from room players
+            if client_info['user_id'] in room_info['players']:
+                del room_info['players'][client_info['user_id']]
             
             # Update database session
             db = SessionLocal()
@@ -375,7 +427,40 @@ class DrawSyncSocketServer:
                 'username': client_info['username']
             }, skip_client_id=client_id)
             
+            # If room is empty, delete it
+            if not room_info['clients']:
+                del self.rooms[room_id]
+                print(f"Room {room_id} deleted (no players left)")
+            
             client_info['room_id'] = None
+    
+    def _handle_delete_room(self, client_id: str, message: dict):
+        """Handle room deletion request"""
+        client_info = self.clients.get(client_id)
+        if not client_info or not client_info.get('room_id'):
+            return
+        
+        room_id = client_info['room_id']
+        if room_id in self.rooms:
+            # Stop game timer if running
+            if room_id in self.game_timers:
+                self.game_timers[room_id].cancel()
+                del self.game_timers[room_id]
+            
+            # Notify all clients in room
+            self._broadcast_to_room(room_id, {
+                'type': 'room_deleted',
+                'message': 'Room has been deleted'
+            })
+            
+            # Close all client connections in the room
+            room_clients = list(self.rooms[room_id]['clients'])
+            for client_id in room_clients:
+                self._disconnect_client(client_id)
+            
+            # Delete room
+            del self.rooms[room_id]
+            print(f"Room {room_id} deleted by {client_info['username']}")
     
     def _handle_draw(self, client_id: str, message: dict):
         """Handle drawing data"""
@@ -384,6 +469,20 @@ class DrawSyncSocketServer:
             return
         
         room_id = client_info['room_id']
+        room_info = self.rooms[room_id]
+        
+        # Check if it's the client's turn to draw
+        if not room_info['game_started']:
+            return
+        
+        players_list = list(room_info['players'].values())
+        if room_info['current_drawer_index'] >= len(players_list):
+            return
+        
+        current_drawer = players_list[room_info['current_drawer_index']]
+        if current_drawer['id'] != client_info['user_id']:
+            return
+        
         drawing_data = {
             'user_id': client_info['user_id'],
             'username': client_info['username'],
@@ -393,11 +492,11 @@ class DrawSyncSocketServer:
             'is_first_point': message.get('is_first_point', False),
             'color': message.get('color', '#000000'),
             'brush_size': message.get('brush_size', 2),
-            'timestamp': message.get('timestamp', time.time() * 1000)  # Convert to milliseconds
+            'timestamp': message.get('timestamp', time.time() * 1000)
         }
         
-        # Add to game service
-        game_service.add_drawing_data(room_id, drawing_data)
+        # Add to room drawing data
+        room_info['drawing_data'].append(drawing_data)
         
         # Broadcast to other players in the room
         self._broadcast_to_room(room_id, {
@@ -419,11 +518,54 @@ class DrawSyncSocketServer:
             'timestamp': time.time()
         }
         
-        # Broadcast to all players in the room
+        # Always broadcast chat message to all players
         self._broadcast_to_room(room_id, {
             'type': 'chat_message',
             **chat_message
         })
+        
+        # Check if it's a word guess
+        if room_id in self.rooms and self.rooms[room_id]['game_started']:
+            self._check_word_guess(room_id, client_info['user_id'], chat_message['message'])
+    
+    def _check_word_guess(self, room_id: int, user_id: int, guess: str):
+        """Check if a chat message is a correct word guess"""
+        room_info = self.rooms[room_id]
+        current_word = room_info['current_word']
+        
+        if not current_word:
+            return
+        
+        # Check if player already guessed
+        if user_id in room_info['guessed_players']:
+            return
+        
+        # Check if guess is correct
+        if guess.lower().strip() == current_word.lower():
+            room_info['guessed_players'].add(user_id)
+            
+            # Award points
+            if user_id in room_info['players']:
+                room_info['players'][user_id]['score'] += 100
+            
+            # Award points to drawer
+            players_list = list(room_info['players'].values())
+            if room_info['current_drawer_index'] < len(players_list):
+                drawer = players_list[room_info['current_drawer_index']]
+                if drawer['id'] in room_info['players']:
+                    room_info['players'][drawer['id']]['score'] += 50
+            
+            # Notify all players about correct guess
+            self._broadcast_to_room(room_id, {
+                'type': 'correct_guess',
+                'user_id': user_id,
+                'username': room_info['players'][user_id]['username'],
+                'word': guess,
+                'message': f"{room_info['players'][user_id]['username']} guessed the word correctly!"
+            })
+            
+            # End round and start next
+            self._end_round(room_id)
     
     def _handle_start_game(self, client_id: str, message: dict):
         """Handle game start request"""
@@ -436,30 +578,181 @@ class DrawSyncSocketServer:
             return
         
         room_id = client_info['room_id']
-        db = SessionLocal()
-        try:
-            # Start the game in the service (synchronous version)
-            game_state = self._start_game_sync(db, room_id)
-            
-            # Broadcast game started event
-            self._broadcast_to_room(room_id, {
-                'type': 'game_started',
-                'room_id': room_id,
-                'game_state': game_state
-            })
-            
-            # Broadcast game state to all players
-            self._broadcast_game_state(room_id, game_state)
-        except Exception as e:
+        room_info = self.rooms[room_id]
+        
+        # Check if enough players
+        if len(room_info['players']) < 2:
             self._send_message(client_id, {
                 'type': 'error',
-                'message': str(e)
+                'message': 'Need at least 2 players to start'
             })
-        finally:
-            db.close()
+            return
+        
+        # Start the game
+        room_info['game_started'] = True
+        room_info['current_round'] = 1
+        room_info['current_drawer_index'] = 0
+        room_info['drawing_data'] = []
+        room_info['guessed_players'] = set()
+        
+        # Broadcast game started
+        self._broadcast_to_room(room_id, {
+            'type': 'game_started',
+            'room_id': room_id
+        })
+        
+        # Start first round
+        self._start_round(room_id)
+    
+    def _start_round(self, room_id: int):
+        """Start a new round"""
+        if room_id not in self.rooms:
+            return
+        
+        room_info = self.rooms[room_id]
+        players_list = list(room_info['players'].values())
+        
+        if room_info['current_drawer_index'] >= len(players_list):
+            # All players have drawn, end game
+            self._end_game(room_id)
+            return
+        
+        # Get current drawer
+        current_drawer = players_list[room_info['current_drawer_index']]
+        
+        # Assign word
+        word = word_manager.get_random_word()
+        room_info['current_word'] = word
+        room_info['time_remaining'] = 60
+        room_info['round_start_time'] = time.time()
+        room_info['guessed_players'] = set()
+        room_info['drawing_data'] = []
+        
+        # Broadcast round start
+        self._broadcast_to_room(room_id, {
+            'type': 'round_started',
+            'round': room_info['current_round'],
+            'drawer': current_drawer['username'],
+            'time_remaining': room_info['time_remaining']
+        })
+        
+        # Send word to drawer
+        for client_id in room_info['clients']:
+            client_info = self.clients[client_id]
+            if client_info['user_id'] == current_drawer['id']:
+                self._send_message(client_id, {
+                    'type': 'word_assigned',
+                    'word': word,
+                    'message': f'Your turn to draw! Word: {word}'
+                })
+            else:
+                self._send_message(client_id, {
+                    'type': 'word_assigned',
+                    'word': '_' * len(word),
+                    'message': f'{current_drawer["username"]} is drawing!'
+                })
+        
+        # Start timer
+        self._start_round_timer(room_id)
+    
+    def _start_round_timer(self, room_id: int):
+        """Start a timer for the current round"""
+        # Cancel existing timer if any
+        if room_id in self.game_timers:
+            self.game_timers[room_id].cancel()
+        
+        def round_timer():
+            start_time = time.time()
+            duration = 60  # 60 seconds
+            
+            while time.time() - start_time < duration:
+                if room_id not in self.rooms:
+                    return
+                
+                room_info = self.rooms[room_id]
+                remaining = max(0, duration - int(time.time() - start_time))
+                room_info['time_remaining'] = remaining
+                
+                # Send time update every second
+                self._broadcast_to_room(room_id, {
+                    'type': 'time_update',
+                    'time_remaining': remaining
+                })
+                
+                time.sleep(1)
+            
+            # Time's up
+            if room_id in self.rooms:
+                self._end_round(room_id)
+        
+        timer_thread = threading.Thread(target=round_timer, daemon=True)
+        timer_thread.start()
+        self.game_timers[room_id] = timer_thread
+    
+    def _end_round(self, room_id: int):
+        """End the current round"""
+        if room_id not in self.rooms:
+            return
+        
+        room_info = self.rooms[room_id]
+        
+        # Stop timer
+        if room_id in self.game_timers:
+            self.game_timers[room_id].cancel()
+            del self.game_timers[room_id]
+        
+        # Broadcast round end
+        self._broadcast_to_room(room_id, {
+            'type': 'round_ended',
+            'round': room_info['current_round'],
+            'word': room_info['current_word']
+        })
+        
+        # Move to next round
+        room_info['current_round'] += 1
+        room_info['current_drawer_index'] += 1
+        
+        # Check if game should end
+        if room_info['current_round'] > room_info['max_rounds']:
+            self._end_game(room_id)
+        else:
+            # Start next round after delay
+            threading.Timer(3.0, lambda: self._start_round(room_id)).start()
+    
+    def _end_game(self, room_id: int):
+        """End the game"""
+        if room_id not in self.rooms:
+            return
+        
+        room_info = self.rooms[room_id]
+        
+        # Stop timer
+        if room_id in self.game_timers:
+            self.game_timers[room_id].cancel()
+            del self.game_timers[room_id]
+        
+        # Calculate final scores
+        final_scores = {}
+        for player in room_info['players'].values():
+            final_scores[player['id']] = player['score']
+        
+        # Broadcast game end
+        self._broadcast_to_room(room_id, {
+            'type': 'game_ended',
+            'final_scores': final_scores,
+            'message': 'Game ended!'
+        })
+        
+        # Reset game state
+        room_info['game_started'] = False
+        room_info['current_round'] = 0
+        room_info['current_drawer_index'] = 0
+        room_info['current_word'] = ''
+        room_info['drawing_data'] = []
+        room_info['guessed_players'] = set()
     
     def _handle_guess_word(self, client_id: str, message: dict):
-        """Handle word guess"""
+        """Handle word guess (legacy support)"""
         client_info = self.clients.get(client_id)
         if not client_info or not client_info.get('room_id'):
             return
@@ -467,58 +760,8 @@ class DrawSyncSocketServer:
         room_id = client_info['room_id']
         guess = message.get('guess', '')
         
-        # Submit guess to game service
-        result = game_service.submit_guess(room_id, client_info['user_id'], guess)
-        
-        # Send result to the guesser
-        self._send_message(client_id, {
-            'type': 'guess_result',
-            'correct': result['correct'],
-            'message': result['message']
-        })
-        
-        if result['correct']:
-            # Award points to guesser and drawer
-            game_state = game_service.active_games.get(room_id)
-            if game_state:
-                drawer_index = game_state.get("current_drawer_index", 0)
-                if drawer_index < len(game_state.get("players", [])):
-                    drawer_id = game_state["players"][drawer_index]["id"]
-                    # Award points (e.g., 100 to guesser, 50 to drawer)
-                    for p in game_state["players"]:
-                        if p["id"] == client_info['user_id']:
-                            p["score"] += 100
-                        if p["id"] == drawer_id:
-                            p["score"] += 50
-            
-            # Notify all players
-            self._broadcast_to_room(room_id, {
-                'type': 'correct_guess',
-                'user_id': client_info['user_id'],
-                'username': client_info['username'],
-                'word': guess,
-                'scores': {p['id']: p['score'] for p in game_state.get("players", [])} if game_state else {}
-            })
-            
-            # End round and start next (synchronous wrapper)
-            self._end_round_sync(room_id)
-            
-            # Fetch updated state
-            updated_game_state = game_service.get_game_state(room_id)
-            if updated_game_state:
-                self._broadcast_game_state(room_id, updated_game_state)
-            else:
-                # Game ended, broadcast final scores
-                # Get final scores from the game state before it was deleted
-                final_scores = {}
-                if game_state:
-                    final_scores = {p['id']: p['score'] for p in game_state.get("players", [])}
-                
-                self._broadcast_to_room(room_id, {
-                    'type': 'game_ended',
-                    'room_id': room_id,
-                    'final_scores': final_scores
-                })
+        # Send as chat message for processing
+        self._check_word_guess(room_id, client_info['user_id'], guess)
     
     def _handle_ready(self, client_id: str, message: dict):
         """Handle player ready status"""
@@ -527,7 +770,12 @@ class DrawSyncSocketServer:
             return
         
         room_id = client_info['room_id']
+        room_info = self.rooms[room_id]
         is_ready = message.get('ready', False)
+        
+        # Update player ready status
+        if client_info['user_id'] in room_info['players']:
+            room_info['players'][client_info['user_id']]['ready'] = is_ready
         
         # Update database session
         db = SessionLocal()
@@ -541,7 +789,6 @@ class DrawSyncSocketServer:
             if session:
                 session.is_ready = is_ready
                 db.commit()
-                print(f"Updated ready status for user {client_info['user_id']} in room {room_id}: {is_ready}")
         
         except Exception as e:
             print(f"Error updating ready status: {e}")
@@ -557,108 +804,93 @@ class DrawSyncSocketServer:
             'ready': is_ready
         })
     
-    def _broadcast_game_state(self, room_id: int, game_state: dict):
-        """Broadcast current game state to all players in the room"""
-        if not game_state:
+    def _handle_skip_turn(self, client_id: str, message: dict):
+        """Handle turn skip request"""
+        client_info = self.clients.get(client_id)
+        if not client_info or not client_info.get('room_id'):
             return
-            
-        # Send word only to the drawer, blanks to others
-        drawer_id = game_state.get("current_drawer_id")
-        word = game_state.get("current_word", "")
         
-        # Create a copy of the clients dict to avoid modification during iteration
-        clients_copy = dict(self.clients)
-        for client_id, info in clients_copy.items():
-            if info.get('room_id') == room_id:
-                if info.get('user_id') == drawer_id:
-                    self._send_message(client_id, {
-                        'type': 'game_state',
-                        'current_drawer_id': drawer_id,
-                        'word': word,
-                        'current_round': game_state.get('current_round', 1),
-                        'max_rounds': game_state.get('max_rounds', 5),
-                        'scores': {p['id']: p['score'] for p in game_state.get('players', [])},
-                        'time_remaining': game_state.get('time_remaining', 60),
-                        'game_started': game_state.get('game_started', False),
-                    })
-                else:
-                    self._send_message(client_id, {
-                        'type': 'game_state',
-                        'current_drawer_id': drawer_id,
-                        'word': '_' * len(word) if word else '',
-                        'current_round': game_state.get('current_round', 1),
-                        'max_rounds': game_state.get('max_rounds', 5),
-                        'scores': {p['id']: p['score'] for p in game_state.get('players', [])},
-                        'time_remaining': game_state.get('time_remaining', 60),
-                        'game_started': game_state.get('game_started', False),
-                    })
+        room_id = client_info['room_id']
+        room_info = self.rooms[room_id]
+        
+        # Check if it's the client's turn
+        players_list = list(room_info['players'].values())
+        if room_info['current_drawer_index'] >= len(players_list):
+            return
+        
+        current_drawer = players_list[room_info['current_drawer_index']]
+        if current_drawer['id'] != client_info['user_id']:
+            return
+        
+        # End current round
+        self._end_round(room_id)
+    
+    def _handle_clear_canvas(self, client_id: str, message: dict):
+        """Handle canvas clear request"""
+        client_info = self.clients.get(client_id)
+        if not client_info or not client_info.get('room_id'):
+            return
+        
+        room_id = client_info['room_id']
+        room_info = self.rooms[room_id]
+        
+        # Check if it's the client's turn
+        players_list = list(room_info['players'].values())
+        if room_info['current_drawer_index'] >= len(players_list):
+            return
+        
+        current_drawer = players_list[room_info['current_drawer_index']]
+        if current_drawer['id'] != client_info['user_id']:
+            return
+        
+        # Clear drawing data
+        room_info['drawing_data'] = []
+        
+        # Broadcast clear canvas
+        self._broadcast_to_room(room_id, {
+            'type': 'canvas_cleared',
+            'user_id': client_info['user_id'],
+            'username': client_info['username']
+        })
+    
+    def _send_game_state_to_client(self, client_id: str, room_id: int):
+        """Send current game state to a specific client"""
+        if room_id not in self.rooms:
+            return
+        
+        room_info = self.rooms[room_id]
+        client_info = self.clients[client_id]
+        
+        # Determine if client is the current drawer
+        players_list = list(room_info['players'].values())
+        is_drawer = False
+        if room_info['current_drawer_index'] < len(players_list):
+            current_drawer = players_list[room_info['current_drawer_index']]
+            is_drawer = current_drawer['id'] == client_info['user_id']
+        
+        # Send appropriate game state
+        game_state = {
+            'type': 'game_state',
+            'current_round': room_info['current_round'],
+            'max_rounds': room_info['max_rounds'],
+            'time_remaining': room_info['time_remaining'],
+            'game_started': room_info['game_started'],
+            'players': list(room_info['players'].values()),
+            'word': room_info['current_word'] if is_drawer else '_' * len(room_info['current_word']) if room_info['current_word'] else '',
+            'is_drawer': is_drawer
+        }
+        
+        self._send_message(client_id, game_state)
     
     def _get_room_players(self, room_id: int) -> List[Dict]:
-        """Get list of players in a room with complete information"""
+        """Get list of players in a room"""
         if room_id not in self.rooms:
             return []
         
-        players = []
-        # Create a copy of the set to avoid "Set changed size during iteration" error
-        client_ids = list(self.rooms[room_id])
-        
-        # Get database session to fetch player details
-        db = SessionLocal()
-        try:
-            for client_id in client_ids:
-                client_info = self.clients.get(client_id)
-                if client_info and client_info.get('user_id'):
-                    # Get session information from database
-                    session = db.query(GameSession).filter(
-                        GameSession.user_id == client_info['user_id'],
-                        GameSession.room_id == room_id,
-                        GameSession.left_at.is_(None)
-                    ).first()
-                    
-                    if session:
-                        players.append({
-                            'id': session.id,
-                            'user_id': client_info['user_id'],
-                            'username': client_info['username'],
-                            'is_ready': session.is_ready,
-                            'score': session.score,
-                            'joined_at': session.joined_at
-                        })
-        finally:
-            db.close()
-        
-        return players
-    
-    def _start_game_sync(self, db, room_id):
-        """Synchronous wrapper for starting a game"""
-        import asyncio
-        
-        # Create a new event loop for this thread if needed
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        # Run the async method in the event loop
-        return loop.run_until_complete(game_service.start_game(db, room_id))
-    
-    def _end_round_sync(self, room_id):
-        """Synchronous wrapper for ending a round"""
-        import asyncio
-        
-        # Create a new event loop for this thread if needed
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        # Run the async method in the event loop
-        return loop.run_until_complete(game_service.end_round(room_id))
+        return list(self.rooms[room_id]['players'].values())
     
     def _disconnect_client(self, client_id: str):
-        """Disconnect and clean up client"""
+        """Disconnect a client"""
         client_info = self.clients.get(client_id)
         if not client_info:
             return
@@ -666,14 +898,24 @@ class DrawSyncSocketServer:
         # Remove from room
         room_id = client_info.get('room_id')
         if room_id and room_id in self.rooms:
-            self.rooms[room_id].discard(client_id)
+            room_info = self.rooms[room_id]
+            room_info['clients'].discard(client_id)
             
-            # Notify other players
+            # Remove player from room players
+            if client_info['user_id'] in room_info['players']:
+                del room_info['players'][client_info['user_id']]
+            
+            # Notify other clients
             self._broadcast_to_room(room_id, {
                 'type': 'player_disconnected',
                 'user_id': client_info['user_id'],
                 'username': client_info['username']
-            })
+            }, skip_client_id=client_id)
+            
+            # If room is empty, delete it
+            if not room_info['clients']:
+                del self.rooms[room_id]
+                print(f"Room {room_id} deleted (no players left)")
         
         # Close socket
         try:
@@ -686,64 +928,21 @@ class DrawSyncSocketServer:
             if client_id in self.clients:
                 del self.clients[client_id]
         
-        print(f"Client {client_id} disconnected")
+        print(f"🔌 Client {client_id} disconnected")
 
-    def _handle_skip_turn(self, client_id: str, message: dict):
-        """Handle skip turn request"""
-        client_info = self.clients.get(client_id)
-        if not client_info or not client_info.get('room_id'):
-            return
-        
-        room_id = client_info['room_id']
-        game_state = game_service.active_games.get(room_id)
-        
-        if not game_state:
-            return
-        
-        # Check if the client is the current drawer
-        current_drawer_id = game_state.get("players", [])[game_state.get("current_drawer_index", 0)]["id"]
-        if client_info['user_id'] != current_drawer_id:
-            return
-        
-        # End the current round
-        self._end_round_sync(room_id)
-        
-        # Fetch updated state
-        updated_game_state = game_service.get_game_state(room_id)
-        if updated_game_state:
-            self._broadcast_game_state(room_id, updated_game_state)
-    
-    def _handle_clear_canvas(self, client_id: str, message: dict):
-        """Handle clear canvas request"""
-        client_info = self.clients.get(client_id)
-        if not client_info or not client_info.get('room_id'):
-            return
-        
-        room_id = client_info['room_id']
-        game_state = game_service.active_games.get(room_id)
-        
-        if not game_state:
-            return
-        
-        # Check if the client is the current drawer
-        current_drawer_id = game_state.get("players", [])[game_state.get("current_drawer_index", 0)]["id"]
-        if client_info['user_id'] != current_drawer_id:
-            return
-        
-        # Clear drawing data
-        game_state["drawing_data"] = []
-        
-        # Broadcast clear canvas to all players
-        self._broadcast_to_room(room_id, {
-            'type': 'canvas_cleared'
-        })
-
-# Global socket server instance
-socket_server = DrawSyncSocketServer()
 
 def start_socket_server():
     """Start the socket server"""
-    socket_server.start()
+    server = DrawSyncSocketServer()
+    try:
+        server.start()
+    except KeyboardInterrupt:
+        print("\n🛑 Shutting down socket server...")
+        server.stop()
+    except Exception as e:
+        print(f"❌ Socket server error: {e}")
+        server.stop()
+
 
 if __name__ == "__main__":
     start_socket_server() 

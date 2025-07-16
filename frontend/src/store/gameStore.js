@@ -58,18 +58,43 @@ const useGameStore = create((set, get) => ({
     });
   },
 
+  deleteRoom: () => {
+    socketManager.deleteRoom();
+    set({
+      currentRoom: null,
+      players: [],
+      isInRoom: false,
+      gameState: null,
+      isGameActive: false,
+      chatMessages: [],
+      drawingData: [],
+    });
+  },
+
   setRoomData: (roomData) => {
     set({ currentRoom: roomData });
   },
 
   setPlayers: (players) => {
-    set({ players });
+    // Ensure players array is unique by ID
+    const uniquePlayers = players.filter((player, index, self) => 
+      index === self.findIndex(p => p.id === player.id)
+    );
+    set({ players: uniquePlayers });
   },
 
   addPlayer: (player) => {
-    set((state) => ({
-      players: [...state.players, player],
-    }));
+    set((state) => {
+      // Check if player already exists
+      const existingPlayer = state.players.find(p => p.id === player.id);
+      if (existingPlayer) {
+        return state; // Player already exists, don't add duplicate
+      }
+      
+      return {
+        players: [...state.players, player],
+      };
+    });
   },
 
   removePlayer: (playerId) => {
@@ -84,9 +109,10 @@ const useGameStore = create((set, get) => ({
       isGameActive: gameState.game_started !== undefined ? gameState.game_started : state.isGameActive,
       currentRound: gameState.current_round || state.currentRound,
       totalRounds: gameState.max_rounds || state.totalRounds,
-      currentWord: gameState.current_word || state.currentWord,
+      currentWord: gameState.word || state.currentWord,
       timeRemaining: gameState.time_remaining || state.timeRemaining,
       currentDrawer: gameState.current_drawer_id || state.currentDrawer,
+      isDrawing: gameState.is_drawer || false,
     }));
   },
 
@@ -157,6 +183,21 @@ const useGameStore = create((set, get) => ({
     }));
   },
 
+  addCorrectGuessMessage: (messageData) => {
+    // Format correct guess message
+    const formattedMessage = {
+      username: messageData.username || 'Unknown',
+      message: messageData.message || 'Guessed correctly!',
+      timestamp: Date.now(),
+      isCorrectGuess: true,
+      isSystemMessage: true,
+    };
+    
+    set((state) => ({
+      chatMessages: [...state.chatMessages, formattedMessage],
+    }));
+  },
+
   setGuessInput: (input) => {
     set({ guessInput: input });
   },
@@ -191,13 +232,22 @@ const useGameStore = create((set, get) => ({
       socketManager.sendDrawData(
         dataWithTimestamp.x,
         dataWithTimestamp.y,
-        dataWithTimestamp.is_drawing, // Use the correct property name
+        dataWithTimestamp.is_drawing,
         dataWithTimestamp.color,
-        dataWithTimestamp.brush_size, // Use the correct property name
+        dataWithTimestamp.brush_size,
         dataWithTimestamp.is_first_point || false
       );
     } else {
       console.error('Cannot send draw data: Socket not connected');
+    }
+  },
+
+  startGame: () => {
+    const { isSocketConnected } = get();
+    if (isSocketConnected) {
+      socketManager.startGame();
+    } else {
+      console.error('Cannot start game: Socket not connected');
     }
   },
 
@@ -210,15 +260,16 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-  setError: (error) => {
-    set({ error });
+  skipTurn: () => {
+    const { isSocketConnected } = get();
+    if (isSocketConnected) {
+      socketManager.skipTurn();
+    } else {
+      console.error('Cannot skip turn: Socket not connected');
+    }
   },
 
-  clearError: () => {
-    set({ error: null });
-  },
-
-  resetGame: () => {
+  resetGameState: () => {
     set({
       gameState: null,
       isGameActive: false,
@@ -229,65 +280,106 @@ const useGameStore = create((set, get) => ({
       currentDrawer: null,
       drawingData: [],
       chatMessages: [],
-      guessInput: '',
-      isDrawingMode: false,
     });
   },
 
-  // New methods for enhanced functionality
-  handleGameStarted: (gameData) => {
+  // Socket event handlers
+  handleSocketConnected: (data) => {
+    set({ isSocketConnected: data.connected });
+  },
+
+  handleAuthenticated: (data) => {
+    console.log('Authenticated:', data);
+  },
+
+  handleRoomJoined: (data) => {
     set({
-      isGameActive: true,
-      gameState: gameData.game_state,
-      currentRound: gameData.game_state.current_round,
-      totalRounds: gameData.game_state.max_rounds,
-      timeRemaining: gameData.game_state.time_remaining,
-      currentWord: gameData.game_state.current_word,
-      currentDrawer: gameData.game_state.current_drawer_id,
-      drawingData: [],
-      chatMessages: [],
+      currentRoom: { id: data.room_id },
+      players: data.players || [],
+      isInRoom: true,
     });
   },
 
-  handleRoundStarted: (roundData) => {
-    set({
-      currentRound: roundData.round,
-      currentWord: roundData.word,
-      currentDrawer: roundData.drawer_id,
-      timeRemaining: roundData.time_limit,
-      drawingData: [],
+  handlePlayerJoined: (data) => {
+    set((state) => {
+      // Check if player already exists
+      const existingPlayer = state.players.find(p => p.id === data.user_id);
+      if (existingPlayer) {
+        return state; // Player already exists, don't add duplicate
+      }
+      
+      return {
+        players: [...state.players, {
+          id: data.user_id,
+          username: data.username,
+          score: 0,
+          ready: false,
+        }],
+      };
     });
   },
 
-  handleCorrectGuess: (guessData) => {
-    const { chatMessages } = get();
-    const newMessage = {
-      username: guessData.username,
-      message: `${guessData.username} guessed correctly!`,
-      timestamp: Date.now(),
-      isCorrectGuess: true,
-      isSystemMessage: true,
-    };
-    set({ chatMessages: [...chatMessages, newMessage] });
+  handlePlayerLeft: (data) => {
+    set((state) => ({
+      players: state.players.filter((p) => p.id !== data.user_id),
+    }));
   },
 
-  handleRoundEnded: (roundData) => {
+  handleGameStarted: (data) => {
+    set({ isGameActive: true });
+  },
+
+  handleRoundStarted: (data) => {
     set({
-      isDrawing: false,
+      currentRound: data.round,
+      timeRemaining: data.time_remaining,
+    });
+  },
+
+  handleWordAssigned: (data) => {
+    set({
+      currentWord: data.word,
+    });
+  },
+
+  handleCorrectGuess: (data) => {
+    // Add correct guess message to chat
+    get().addCorrectGuessMessage(data);
+  },
+
+  handleRoundEnded: (data) => {
+    set({
       currentWord: '',
-      timeRemaining: 0,
+      drawingData: [],
     });
   },
 
-  handleGameEnded: (gameData) => {
+  handleGameEnded: (data) => {
     set({
       isGameActive: false,
-      gameState: null,
       currentRound: 0,
       timeRemaining: 0,
       currentWord: '',
-      isDrawing: false,
-      currentDrawer: null,
+      drawingData: [],
+    });
+  },
+
+  handleTimeUpdate: (data) => {
+    set({ timeRemaining: data.time_remaining });
+  },
+
+  handleCanvasCleared: (data) => {
+    set({ drawingData: [] });
+  },
+
+  handleRoomDeleted: (data) => {
+    set({
+      currentRoom: null,
+      players: [],
+      isInRoom: false,
+      gameState: null,
+      isGameActive: false,
+      chatMessages: [],
       drawingData: [],
     });
   },

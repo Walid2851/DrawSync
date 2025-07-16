@@ -2,12 +2,12 @@ class SocketManager {
   constructor() {
     this.socket = null;
     this.isConnected = false;
-    this.eventListeners = new Map();
+    this.eventListeners = {};
     this.connectionAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
-    this.messageQueue = [];
     this.reconnectTimer = null;
+    this.messageQueue = [];
   }
 
   connect(token) {
@@ -69,7 +69,6 @@ class SocketManager {
       this.socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log('📨 Received message:', message);
           this.handleMessage(message);
         } catch (error) {
           console.error('❌ Error parsing message:', error);
@@ -77,7 +76,7 @@ class SocketManager {
       };
 
     } catch (error) {
-      console.error('❌ Failed to create WebSocket connection:', error);
+      console.error('❌ Error creating WebSocket connection:', error);
       this.isConnected = false;
       this.emit('socket_connected', { connected: false });
     }
@@ -99,19 +98,28 @@ class SocketManager {
     console.log('🔌 Disconnected from socket server');
   }
 
-  sendMessage(message) {
-    if (!this.socket || !this.isConnected) {
-      console.warn('⚠️ Socket not connected, queuing message:', message);
-      this.messageQueue.push(message);
-      return;
+  on(event, callback) {
+    if (!this.eventListeners[event]) {
+      this.eventListeners[event] = [];
     }
+    this.eventListeners[event].push(callback);
+  }
 
-    try {
-      const messageStr = JSON.stringify(message) + '\n';
-      this.socket.send(messageStr);
-      console.log('📤 Sent message:', message);
-    } catch (error) {
-      console.error('❌ Error sending message:', error);
+  off(event, callback) {
+    if (this.eventListeners[event]) {
+      this.eventListeners[event] = this.eventListeners[event].filter(cb => cb !== callback);
+    }
+  }
+
+  emit(event, data) {
+    if (this.eventListeners[event]) {
+      this.eventListeners[event].forEach(callback => {
+        try {
+          callback(data);
+        } catch (error) {
+          console.error(`Error in event listener for ${event}:`, error);
+        }
+      });
     }
   }
 
@@ -177,17 +185,33 @@ class SocketManager {
       case 'time_update':
         console.log('⏰ Time update:', message);
         break;
-      case 'drawer_changed':
-        console.log('👨‍🎨 Drawer changed:', message);
-        break;
       case 'word_assigned':
         console.log('📝 Word assigned:', message);
         break;
       case 'canvas_cleared':
         console.log('🧹 Canvas cleared:', message);
         break;
+      case 'room_deleted':
+        console.log('🗑️ Room deleted:', message);
+        break;
       default:
-        console.log('📨 Unknown message type:', messageType, message);
+        console.log('❓ Unknown message type:', messageType, message);
+    }
+  }
+
+  sendMessage(message) {
+    if (this.socket && this.isConnected) {
+      try {
+        this.socket.send(JSON.stringify(message));
+        return true;
+      } catch (error) {
+        console.error('❌ Error sending message:', error);
+        return false;
+      }
+    } else {
+      console.warn('⚠️ Socket not connected, queuing message:', message);
+      this.messageQueue.push(message);
+      return false;
     }
   }
 
@@ -205,43 +229,13 @@ class SocketManager {
     });
   }
 
-  // Drawing
-  sendDrawData(x, y, isDrawing, color = '#000000', brushSize = 2, isFirstPoint = false) {
+  deleteRoom() {
     this.sendMessage({
-      type: 'draw',
-      x: x,
-      y: y,
-      is_drawing: isDrawing,
-      is_first_point: isFirstPoint,
-      color: color,
-      brush_size: brushSize,
-      timestamp: Date.now()
+      type: 'delete_room'
     });
   }
 
-  // Clear canvas
-  sendClearCanvas() {
-    this.sendMessage({
-      type: 'clear_canvas'
-    });
-  }
-
-  // Chat and guessing
-  sendChatMessage(message) {
-    this.sendMessage({
-      type: 'chat_message',
-      message: message
-    });
-  }
-
-  sendGuess(guess) {
-    this.sendMessage({
-      type: 'guess_word',
-      guess: guess
-    });
-  }
-
-  // Game control
+  // Game management
   startGame() {
     this.sendMessage({
       type: 'start_game'
@@ -261,55 +255,48 @@ class SocketManager {
     });
   }
 
-  clearCanvas() {
+  // Drawing
+  sendDrawData(x, y, isDrawing, color = '#000000', brushSize = 2, isFirstPoint = false) {
+    this.sendMessage({
+      type: 'draw',
+      x: x,
+      y: y,
+      is_drawing: isDrawing,
+      is_first_point: isFirstPoint,
+      color: color,
+      brush_size: brushSize,
+      timestamp: Date.now()
+    });
+  }
+
+  sendClearCanvas() {
     this.sendMessage({
       type: 'clear_canvas'
     });
   }
 
-  // Event handling
-  on(event, callback) {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, []);
-    }
-    this.eventListeners.get(event).push(callback);
+  // Chat and guessing
+  sendChatMessage(message) {
+    this.sendMessage({
+      type: 'chat_message',
+      message: message
+    });
   }
 
-  off(event, callback) {
-    if (this.eventListeners.has(event)) {
-      const listeners = this.eventListeners.get(event);
-      const index = listeners.indexOf(callback);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    }
+  sendGuess(guess) {
+    // Send as chat message for word guessing
+    this.sendMessage({
+      type: 'chat_message',
+      message: guess
+    });
   }
 
-  emit(event, data) {
-    if (this.eventListeners.has(event)) {
-      // Create a copy of the listeners array to avoid modification during iteration
-      const listeners = [...this.eventListeners.get(event)];
-      listeners.forEach(callback => {
-        try {
-          callback(data);
-        } catch (error) {
-          console.error(`❌ Error in event listener for ${event}:`, error);
-        }
-      });
-    }
-  }
-
-  // Utility methods
-  isConnected() {
-    return this.isConnected;
-  }
-
-  getConnectionStatus() {
-    return {
-      connected: this.isConnected,
-      attempts: this.connectionAttempts,
-      maxAttempts: this.maxReconnectAttempts
-    };
+  // Legacy support for direct guess messages
+  sendGuessWord(guess) {
+    this.sendMessage({
+      type: 'guess_word',
+      guess: guess
+    });
   }
 }
 
