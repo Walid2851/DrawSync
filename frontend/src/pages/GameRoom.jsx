@@ -55,6 +55,7 @@ const GameRoom = () => {
     handleTimeUpdate,
     handleCanvasCleared,
     handleRoomDeleted,
+    handlePlayersUpdate,
   } = useGameStore();
 
   const [isReady, setIsReady] = useState(false);
@@ -142,6 +143,10 @@ const GameRoom = () => {
     navigate('/dashboard');
   }, [handleRoomDeleted, navigate]);
 
+  const handlePlayersUpdateEvent = useCallback((data) => {
+    handlePlayersUpdate(data);
+  }, [handlePlayersUpdate]);
+
   const handleChatMessageEvent = useCallback((data) => {
     addChatMessageFromSocket(data);
   }, [addChatMessageFromSocket]);
@@ -223,6 +228,7 @@ const GameRoom = () => {
     socketManager.on('canvas_cleared', handleCanvasClearedEvent);
     socketManager.on('draw_data', handleDrawDataEvent);
     socketManager.on('room_deleted', handleRoomDeletedEvent);
+    socketManager.on('players_update', handlePlayersUpdateEvent);
 
     // Initial fetch of players
     const fetchPlayers = async () => {
@@ -256,6 +262,7 @@ const GameRoom = () => {
       socketManager.off('canvas_cleared', handleCanvasClearedEvent);
       socketManager.off('draw_data', handleDrawDataEvent);
       socketManager.off('room_deleted', handleRoomDeletedEvent);
+      socketManager.off('players_update', handlePlayersUpdateEvent);
     };
   }, [
     token,
@@ -280,6 +287,7 @@ const GameRoom = () => {
     handleCanvasClearedEvent,
     handleDrawDataEvent,
     handleRoomDeletedEvent,
+    handlePlayersUpdateEvent,
   ]);
 
   if (isLoading) {

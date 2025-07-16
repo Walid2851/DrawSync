@@ -564,6 +564,12 @@ class DrawSyncSocketServer:
                 'message': f"{room_info['players'][user_id]['username']} guessed the word correctly!"
             })
             
+            # Broadcast updated player scores
+            self._broadcast_to_room(room_id, {
+                'type': 'players_update',
+                'players': list(room_info['players'].values())
+            })
+            
             # End round and start next
             self._end_round(room_id)
     
@@ -659,7 +665,11 @@ class DrawSyncSocketServer:
         """Start a timer for the current round"""
         # Cancel existing timer if any
         if room_id in self.game_timers:
-            self.game_timers[room_id].cancel()
+            try:
+                self.game_timers[room_id].cancel()
+            except AttributeError:
+                # Thread doesn't have cancel method, just let it finish
+                pass
         
         def round_timer():
             start_time = time.time()
@@ -698,7 +708,11 @@ class DrawSyncSocketServer:
         
         # Stop timer
         if room_id in self.game_timers:
-            self.game_timers[room_id].cancel()
+            try:
+                self.game_timers[room_id].cancel()
+            except AttributeError:
+                # Thread doesn't have cancel method, just let it finish
+                pass
             del self.game_timers[room_id]
         
         # Broadcast round end
@@ -728,7 +742,11 @@ class DrawSyncSocketServer:
         
         # Stop timer
         if room_id in self.game_timers:
-            self.game_timers[room_id].cancel()
+            try:
+                self.game_timers[room_id].cancel()
+            except AttributeError:
+                # Thread doesn't have cancel method, just let it finish
+                pass
             del self.game_timers[room_id]
         
         # Calculate final scores

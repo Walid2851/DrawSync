@@ -383,6 +383,10 @@ const useGameStore = create((set, get) => ({
       drawingData: [],
     });
   },
+
+  handlePlayersUpdate: (data) => {
+    set({ players: data.players || [] });
+  },
 }));
 
 export default useGameStore; 

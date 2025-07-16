@@ -194,6 +194,9 @@ class SocketManager {
       case 'room_deleted':
         console.log('🗑️ Room deleted:', message);
         break;
+      case 'players_update':
+        console.log('👥 Players updated:', message);
+        break;
       default:
         console.log('❓ Unknown message type:', messageType, message);
     }
