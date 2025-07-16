@@ -164,6 +164,9 @@ class SocketManager {
       case 'correct_guess':
         console.log('🎉 Correct guess:', message);
         break;
+      case 'all_guessed':
+        console.log('🎉 All players guessed correctly:', message);
+        break;
       case 'player_ready':
         console.log('✅ Player ready:', message);
         break;

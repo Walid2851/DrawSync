@@ -23,6 +23,7 @@ const ChatBox = ({
     currentRound,
     totalRounds,
     currentWord,
+    guessProgress,
   } = useGameStore();
 
   // Check if current user is the drawer
@@ -120,11 +121,18 @@ const ChatBox = ({
                 }
               </p>
             </div>
-            {isCurrentDrawer && currentWord && (
-              <div className="bg-blue-100 px-2 py-1 rounded text-xs font-medium">
-                Word: {currentWord}
-              </div>
-            )}
+            <div className="flex items-center space-x-2">
+              {!isCurrentDrawer && guessProgress.total > 0 && (
+                <div className="bg-green-100 px-2 py-1 rounded text-xs font-medium text-green-800">
+                  {guessProgress.guessed}/{guessProgress.total} guessed
+                </div>
+              )}
+              {isCurrentDrawer && currentWord && (
+                <div className="bg-blue-100 px-2 py-1 rounded text-xs font-medium">
+                  Word: {currentWord}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

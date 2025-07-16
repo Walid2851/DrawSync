@@ -16,6 +16,8 @@ const useGameStore = create((set, get) => ({
   currentWord: '',
   isDrawing: false,
   currentDrawer: null,
+  guessedPlayers: [],
+  guessProgress: { guessed: 0, total: 0 },
 
   // Drawing state
   drawingData: [],
@@ -334,6 +336,8 @@ const useGameStore = create((set, get) => ({
       currentRound: data.round,
       timeRemaining: data.time_remaining,
       drawingData: [], // Clear drawing data for new round
+      guessedPlayers: [], // Reset guessed players for new round
+      guessProgress: { guessed: 0, total: 0 }, // Reset guess progress
     });
     console.log('Round started:', data);
   },
@@ -347,6 +351,37 @@ const useGameStore = create((set, get) => ({
   handleCorrectGuess: (data) => {
     // Add correct guess message to chat
     get().addCorrectGuessMessage(data);
+    
+    // Update guess progress
+    set((state) => {
+      const newGuessedPlayers = [...state.guessedPlayers, data.user_id];
+      const nonDrawerPlayers = state.players.filter(p => p.id !== state.currentDrawer);
+      const totalNonDrawers = nonDrawerPlayers.length;
+      const guessedCount = newGuessedPlayers.length;
+      
+      return {
+        guessedPlayers: newGuessedPlayers,
+        guessProgress: {
+          guessed: guessedCount,
+          total: totalNonDrawers
+        }
+      };
+    });
+  },
+
+  handleAllGuessed: (data) => {
+    // Add system message about all players guessing
+    const systemMessage = {
+      username: 'System',
+      message: data.message || 'Everyone guessed correctly!',
+      timestamp: Date.now(),
+      isCorrectGuess: false,
+      isSystemMessage: true,
+    };
+    
+    set((state) => ({
+      chatMessages: [...state.chatMessages, systemMessage],
+    }));
   },
 
   handleRoundEnded: (data) => {

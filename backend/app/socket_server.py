@@ -612,8 +612,28 @@ class DrawSyncSocketServer:
                 'players': list(room_info['players'].values())
             })
             
-            # End round and start next
-            self._end_round(room_id)
+            # Check if all non-drawer players have guessed correctly
+            players_list = list(room_info['players'].values())
+            if room_info['current_drawer_index'] < len(players_list):
+                drawer = players_list[room_info['current_drawer_index']]
+                non_drawer_players = [p for p in players_list if p['id'] != drawer['id']]
+                guessed_players = len(room_info['guessed_players'])
+                
+                # If all non-drawer players have guessed correctly, end the round
+                if guessed_players >= len(non_drawer_players):
+                    print(f"🎉 All players guessed correctly! Ending round {room_info['current_round']}")
+                    
+                    # Notify all players that everyone guessed correctly
+                    self._broadcast_to_room(room_id, {
+                        'type': 'all_guessed',
+                        'message': 'Everyone guessed correctly! Round ending...',
+                        'word': current_word
+                    })
+                    
+                    # End round after a short delay to show the message
+                    threading.Timer(2.0, lambda: self._end_round(room_id)).start()
+                else:
+                    print(f"🎯 {guessed_players}/{len(non_drawer_players)} players guessed correctly. Round continues...")
             
             return True
         

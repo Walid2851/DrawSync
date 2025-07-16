@@ -50,6 +50,7 @@ const GameRoom = () => {
     handleRoundStarted,
     handleWordAssigned,
     handleCorrectGuess,
+    handleAllGuessed,
     handleRoundEnded,
     handleGameEnded,
     handleTimeUpdate,
@@ -114,6 +115,11 @@ const GameRoom = () => {
     handleCorrectGuess(data);
     toast.success(`${data.username} guessed correctly!`);
   }, [handleCorrectGuess]);
+
+  const handleAllGuessedEvent = useCallback((data) => {
+    handleAllGuessed(data);
+    toast.success('Everyone guessed correctly! Round ending...');
+  }, [handleAllGuessed]);
 
   const handleRoundEndedEvent = useCallback((data) => {
     handleRoundEnded(data);
@@ -223,6 +229,7 @@ const GameRoom = () => {
     socketManager.on('game_started', handleGameStartedEvent);
     socketManager.on('round_started', handleRoundStartedEvent);
     socketManager.on('correct_guess', handleCorrectGuessEvent);
+    socketManager.on('all_guessed', handleAllGuessedEvent);
     socketManager.on('round_ended', handleRoundEndedEvent);
     socketManager.on('game_ended', handleGameEndedEvent);
     socketManager.on('time_update', handleTimeUpdateEvent);
@@ -257,6 +264,7 @@ const GameRoom = () => {
       socketManager.off('game_started', handleGameStartedEvent);
       socketManager.off('round_started', handleRoundStartedEvent);
       socketManager.off('correct_guess', handleCorrectGuessEvent);
+      socketManager.off('all_guessed', handleAllGuessedEvent);
       socketManager.off('round_ended', handleRoundEndedEvent);
       socketManager.off('game_ended', handleGameEndedEvent);
       socketManager.off('time_update', handleTimeUpdateEvent);
@@ -282,6 +290,7 @@ const GameRoom = () => {
     handleGameStartedEvent,
     handleRoundStartedEvent,
     handleCorrectGuessEvent,
+    handleAllGuessedEvent,
     handleRoundEndedEvent,
     handleGameEndedEvent,
     handleTimeUpdateEvent,
