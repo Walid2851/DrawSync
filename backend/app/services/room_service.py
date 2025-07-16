@@ -137,10 +137,15 @@ class RoomService:
     
     @staticmethod
     def get_public_rooms(db: Session) -> List[GameRoom]:
-        """Get all public rooms"""
+        """Get all public rooms that are not full"""
+        # First, clean up full rooms
+        RoomService.delete_full_rooms(db)
+        
+        # Return only active, public rooms that are not full
         return db.query(GameRoom).filter(
             GameRoom.is_private == False,
-            GameRoom.is_active == True
+            GameRoom.is_active == True,
+            GameRoom.current_players < GameRoom.max_players
         ).all()
     
     @staticmethod
@@ -177,4 +182,46 @@ class RoomService:
                     setattr(room, key, value)
             db.commit()
             db.refresh(room)
-        return room 
+        return room
+
+    @staticmethod
+    def delete_full_rooms(db: Session):
+        """Delete rooms that are at maximum capacity"""
+        full_rooms = db.query(GameRoom).filter(
+            GameRoom.current_players >= GameRoom.max_players,
+            GameRoom.is_active == True
+        ).all()
+        
+        deleted_count = 0
+        for room in full_rooms:
+            # Mark room as inactive instead of deleting to preserve data
+            room.is_active = False
+            deleted_count += 1
+        
+        if deleted_count > 0:
+            db.commit()
+            print(f"Auto-deleted {deleted_count} full rooms")
+        
+        return deleted_count
+
+    @staticmethod
+    def cleanup_inactive_rooms(db: Session, hours_old: int = 24):
+        """Delete inactive rooms that are older than specified hours"""
+        from datetime import datetime, timedelta
+        
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours_old)
+        inactive_rooms = db.query(GameRoom).filter(
+            GameRoom.is_active == False,
+            GameRoom.created_at < cutoff_time
+        ).all()
+        
+        deleted_count = 0
+        for room in inactive_rooms:
+            db.delete(room)
+            deleted_count += 1
+        
+        if deleted_count > 0:
+            db.commit()
+            print(f"Cleaned up {deleted_count} old inactive rooms")
+        
+        return deleted_count 

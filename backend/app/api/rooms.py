@@ -60,4 +60,17 @@ def get_room_by_code(room_code: str, db: Session = Depends(get_db)):
 def get_room_players(room_id: int, db: Session = Depends(get_db)):
     """Get all players in a room"""
     players = RoomService.get_room_players(db, room_id)
-    return {"players": players} 
+    return {"players": players}
+
+
+@router.post("/cleanup")
+def cleanup_rooms(db: Session = Depends(get_db)):
+    """Clean up full and old inactive rooms"""
+    full_rooms_deleted = RoomService.delete_full_rooms(db)
+    old_rooms_deleted = RoomService.cleanup_inactive_rooms(db, hours_old=24)
+    
+    return {
+        "message": "Room cleanup completed",
+        "full_rooms_deleted": full_rooms_deleted,
+        "old_rooms_deleted": old_rooms_deleted
+    } 

@@ -26,6 +26,7 @@ class DrawSyncSocketServer:
         # Game state management
         self.active_games = {}  # room_id -> game_state
         self.game_timers = {}   # room_id -> timer_thread
+        self.timer_stop_flags = {}  # room_id -> stop_flag
         
     def start(self):
         """Start the socket server"""
@@ -85,9 +86,12 @@ class DrawSyncSocketServer:
             self.server_socket.close()
         
         # Stop all game timers
-        for timer in self.game_timers.values():
-            if timer and timer.is_alive():
-                timer.cancel()
+        for room_id in list(self.timer_stop_flags.keys()):
+            self.timer_stop_flags[room_id] = True
+        
+        # Clear timer references
+        self.game_timers.clear()
+        self.timer_stop_flags.clear()
         
         # Close all client connections
         with self.client_lock:
@@ -300,6 +304,18 @@ class DrawSyncSocketServer:
         
         # Add client to new room
         if room_id not in self.rooms:
+            # Get room info from database
+            db = SessionLocal()
+            try:
+                from .models.game_room import GameRoom
+                db_room = db.query(GameRoom).filter(GameRoom.id == room_id).first()
+                max_players = db_room.max_players if db_room else 8
+            except Exception as e:
+                print(f"Error getting room info: {e}")
+                max_players = 8
+            finally:
+                db.close()
+            
             self.rooms[room_id] = {
                 'clients': set(),
                 'players': {},
@@ -312,8 +328,18 @@ class DrawSyncSocketServer:
                 'time_remaining': 60,
                 'game_started': False,
                 'guessed_players': set(),
-                'round_start_time': None
+                'round_start_time': None,
+                'max_players': max_players
             }
+        
+        # Check if room is full
+        room_info = self.rooms[room_id]
+        if len(room_info['players']) >= room_info.get('max_players', 8):
+            self._send_message(client_id, {
+                'type': 'error',
+                'message': 'Room is full'
+            })
+            return
         
         self.rooms[room_id]['clients'].add(client_id)
         client_info['room_id'] = room_id
@@ -330,6 +356,7 @@ class DrawSyncSocketServer:
         db = SessionLocal()
         try:
             import uuid
+            from .models.game_room import GameRoom
             
             # Check if player already has a session
             existing_session = db.query(GameSession).filter(
@@ -347,6 +374,12 @@ class DrawSyncSocketServer:
                     is_ready=False
                 )
                 db.add(session)
+                
+                # Update room player count
+                room = db.query(GameRoom).filter(GameRoom.id == room_id).first()
+                if room:
+                    room.current_players += 1
+                
                 db.commit()
                 print(f"Created game session for user {client_info['user_id']} in room {room_id}")
             
@@ -401,6 +434,7 @@ class DrawSyncSocketServer:
             db = SessionLocal()
             try:
                 from sqlalchemy.sql import func
+                from .models.game_room import GameRoom
                 
                 # Mark session as left
                 session = db.query(GameSession).filter(
@@ -411,6 +445,12 @@ class DrawSyncSocketServer:
                 
                 if session:
                     session.left_at = func.now()
+                    
+                    # Update room player count
+                    room = db.query(GameRoom).filter(GameRoom.id == room_id).first()
+                    if room and room.current_players > 0:
+                        room.current_players -= 1
+                    
                     db.commit()
                     print(f"Marked session as left for user {client_info['user_id']} in room {room_id}")
             
@@ -518,15 +558,17 @@ class DrawSyncSocketServer:
             'timestamp': time.time()
         }
         
-        # Always broadcast chat message to all players
-        self._broadcast_to_room(room_id, {
-            'type': 'chat_message',
-            **chat_message
-        })
-        
-        # Check if it's a word guess
+        # Check if it's a word guess first
+        is_correct_guess = False
         if room_id in self.rooms and self.rooms[room_id]['game_started']:
-            self._check_word_guess(room_id, client_info['user_id'], chat_message['message'])
+            is_correct_guess = self._check_word_guess(room_id, client_info['user_id'], chat_message['message'])
+        
+        # Only broadcast chat message if it's not a correct guess
+        if not is_correct_guess:
+            self._broadcast_to_room(room_id, {
+                'type': 'chat_message',
+                **chat_message
+            })
     
     def _check_word_guess(self, room_id: int, user_id: int, guess: str):
         """Check if a chat message is a correct word guess"""
@@ -534,11 +576,11 @@ class DrawSyncSocketServer:
         current_word = room_info['current_word']
         
         if not current_word:
-            return
+            return False
         
         # Check if player already guessed
         if user_id in room_info['guessed_players']:
-            return
+            return False
         
         # Check if guess is correct
         if guess.lower().strip() == current_word.lower():
@@ -572,6 +614,10 @@ class DrawSyncSocketServer:
             
             # End round and start next
             self._end_round(room_id)
+            
+            return True
+        
+        return False
     
     def _handle_start_game(self, client_id: str, message: dict):
         """Handle game start request"""
@@ -617,15 +663,19 @@ class DrawSyncSocketServer:
     def _start_round(self, room_id: int):
         """Start a new round"""
         if room_id not in self.rooms:
+            print(f"❌ Cannot start round: Room {room_id} not found")
             return
         
         room_info = self.rooms[room_id]
         players_list = list(room_info['players'].values())
         
-        if room_info['current_drawer_index'] >= len(players_list):
-            # All players have drawn, end game
-            self._end_game(room_id)
+        if not players_list:
+            print(f"❌ Cannot start round: No players in room {room_id}")
             return
+        
+        # Ensure drawer index is within bounds
+        if room_info['current_drawer_index'] >= len(players_list):
+            room_info['current_drawer_index'] = 0
         
         # Get current drawer
         current_drawer = players_list[room_info['current_drawer_index']]
@@ -637,6 +687,10 @@ class DrawSyncSocketServer:
         room_info['round_start_time'] = time.time()
         room_info['guessed_players'] = set()
         room_info['drawing_data'] = []
+        
+        print(f"🔄 Starting round {room_info['current_round']} in room {room_id}")
+        print(f"👤 Current drawer: {current_drawer['username']} (ID: {current_drawer['id']})")
+        print(f"📝 Word: {word}")
         
         # Broadcast round start
         self._broadcast_to_room(room_id, {
@@ -671,20 +725,26 @@ class DrawSyncSocketServer:
     
     def _start_round_timer(self, room_id: int):
         """Start a timer for the current round"""
-        # Cancel existing timer if any
-        if room_id in self.game_timers:
-            try:
-                self.game_timers[room_id].cancel()
-            except AttributeError:
-                # Thread doesn't have cancel method, just let it finish
-                pass
+        # Stop existing timer if any
+        if room_id in self.timer_stop_flags:
+            self.timer_stop_flags[room_id] = True
+        
+        # Create stop flag for this timer
+        self.timer_stop_flags[room_id] = False
         
         def round_timer():
             start_time = time.time()
             duration = 60  # 60 seconds
+            print(f"🕐 Timer started for room {room_id}, duration: {duration}s")
             
             while time.time() - start_time < duration:
+                # Check if timer should stop
+                if self.timer_stop_flags.get(room_id, False):
+                    print(f"🛑 Timer stopped for room {room_id}")
+                    return
+                
                 if room_id not in self.rooms:
+                    print(f"🛑 Room {room_id} no longer exists, stopping timer")
                     return
                 
                 room_info = self.rooms[room_id]
@@ -697,11 +757,18 @@ class DrawSyncSocketServer:
                     'time_remaining': remaining
                 })
                 
+                # Debug output every 10 seconds
+                if remaining % 10 == 0 and remaining > 0:
+                    print(f"⏰ Room {room_id}: {remaining}s remaining")
+                
                 time.sleep(1)
             
             # Time's up
-            if room_id in self.rooms:
+            if room_id in self.rooms and not self.timer_stop_flags.get(room_id, False):
+                print(f"⏰ Time's up for room {room_id}, ending round")
                 self._end_round(room_id)
+            else:
+                print(f"🛑 Timer for room {room_id} was stopped or room doesn't exist")
         
         timer_thread = threading.Thread(target=round_timer, daemon=True)
         timer_thread.start()
@@ -710,17 +777,18 @@ class DrawSyncSocketServer:
     def _end_round(self, room_id: int):
         """End the current round"""
         if room_id not in self.rooms:
+            print(f"❌ Cannot end round: Room {room_id} not found")
             return
         
         room_info = self.rooms[room_id]
         
+        print(f"⏹️ Ending round {room_info['current_round']} in room {room_id}")
+        print(f"📝 Word was: {room_info['current_word']}")
+        
         # Stop timer
+        if room_id in self.timer_stop_flags:
+            self.timer_stop_flags[room_id] = True
         if room_id in self.game_timers:
-            try:
-                self.game_timers[room_id].cancel()
-            except AttributeError:
-                # Thread doesn't have cancel method, just let it finish
-                pass
             del self.game_timers[room_id]
         
         # Broadcast round end
@@ -734,15 +802,20 @@ class DrawSyncSocketServer:
         room_info['current_round'] += 1
         room_info['current_drawer_index'] += 1
         
+        print(f"🔄 Moving to round {room_info['current_round']} (max: {room_info['max_rounds']})")
+        print(f"👤 Next drawer index: {room_info['current_drawer_index']}")
+        
         # Send game state update to all clients
         for client_id in room_info['clients']:
             self._send_game_state_to_client(client_id, room_id)
         
         # Check if game should end
         if room_info['current_round'] > room_info['max_rounds']:
+            print(f"🏁 Game ended: reached max rounds ({room_info['max_rounds']})")
             self._end_game(room_id)
         else:
             # Start next round after delay
+            print(f"⏳ Starting next round in 3 seconds...")
             threading.Timer(3.0, lambda: self._start_round(room_id)).start()
     
     def _end_game(self, room_id: int):
@@ -753,12 +826,9 @@ class DrawSyncSocketServer:
         room_info = self.rooms[room_id]
         
         # Stop timer
+        if room_id in self.timer_stop_flags:
+            self.timer_stop_flags[room_id] = True
         if room_id in self.game_timers:
-            try:
-                self.game_timers[room_id].cancel()
-            except AttributeError:
-                # Thread doesn't have cancel method, just let it finish
-                pass
             del self.game_timers[room_id]
         
         # Calculate final scores

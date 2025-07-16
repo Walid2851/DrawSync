@@ -112,9 +112,8 @@ const GameRoom = () => {
 
   const handleCorrectGuessEvent = useCallback((data) => {
     handleCorrectGuess(data);
-    addCorrectGuessMessage(data);
     toast.success(`${data.username} guessed correctly!`);
-  }, [handleCorrectGuess, addCorrectGuessMessage]);
+  }, [handleCorrectGuess]);
 
   const handleRoundEndedEvent = useCallback((data) => {
     handleRoundEnded(data);

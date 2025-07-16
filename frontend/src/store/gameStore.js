@@ -333,7 +333,9 @@ const useGameStore = create((set, get) => ({
     set({
       currentRound: data.round,
       timeRemaining: data.time_remaining,
+      drawingData: [], // Clear drawing data for new round
     });
+    console.log('Round started:', data);
   },
 
   handleWordAssigned: (data) => {
@@ -352,6 +354,7 @@ const useGameStore = create((set, get) => ({
       currentWord: '',
       drawingData: [],
     });
+    console.log('Round ended:', data);
   },
 
   handleGameEnded: (data) => {
@@ -366,6 +369,7 @@ const useGameStore = create((set, get) => ({
 
   handleTimeUpdate: (data) => {
     set({ timeRemaining: data.time_remaining });
+    console.log('Time update:', data.time_remaining);
   },
 
   handleCanvasCleared: (data) => {
@@ -410,6 +414,7 @@ const useGameStore = create((set, get) => ({
       currentDrawer: data.current_drawer_id || state.currentDrawer,
       isDrawing: data.is_drawer || false,
     }));
+    console.log('Game state update:', data);
   },
 }));
 
