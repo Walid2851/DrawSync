@@ -102,7 +102,7 @@ class DrawSyncSocketServer:
                     pass
             self.clients.clear()
         
-        print("🛑 Socket server stopped")
+        print("Socket server stopped")
     
     def _handle_clients(self):
         """Handle client messages in a separate thread"""
